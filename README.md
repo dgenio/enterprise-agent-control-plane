@@ -34,18 +34,35 @@ make test
 
 ## Demo walkthrough
 
-`make demo` prints two paths:
+`make demo` runs the unsafe baseline across a realistic Customer Operations workload,
+annotates each risk, then contrasts it with the governed path.
 
-1. **Unsafe baseline**
-   - exposes full catalog,
-   - emits raw tool output,
-   - attempts risky refund action directly.
+1. **Unsafe baseline** — a multi-case workload (refund, escalation, email reply,
+   an ambiguous "just fix it" request, and a not-found case), each annotated with the
+   gap it surfaces:
+   - over-permissioned context (the full 9-tool catalog offered every step),
+   - raw tool-output leakage (sensitive-looking fields forwarded verbatim),
+   - **cumulative context growth** (catalog re-sent + raw outputs retained each step),
+   - **poor tool selection** (an over-eager router reaches the destructive refund for a
+     mere lookup),
+   - **indirect prompt injection** (a planted `[FAKE]` ticket directive steers a write),
+   - **no execution contract** (a refund fires on a not-found invoice, with no amount
+     bound and no idempotency guard),
+   - policy-blind writes, audit-light logging, and a **lost operator correction** that
+     recurs because nothing captures it.
 2. **Governed path**
    - shortlists relevant capabilities,
    - runs deterministic refund-review flow,
    - blocks/reroutes risky action via policy decision,
    - returns bounded output frame,
-   - emits audit trace in `traces/governed_run.json`.
+   - emits audit trace under `traces/`.
+3. **Side-by-side contrast** — a generated scorecard putting both paths on the same
+   dimensions (tools exposed, raw fields in context, ungated writes, policy decisions,
+   audit trace).
+
+Illustrative, inert fixtures live under [`demos/`](demos/) (a risky AI-generated change
+no pre-merge gate would catch). The lesson-capture gap is written up in
+[`docs/lesson-capture-gap.md`](docs/lesson-capture-gap.md).
 
 ## What this demonstrates
 

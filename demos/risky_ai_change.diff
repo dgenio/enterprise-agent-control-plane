@@ -1,0 +1,26 @@
+# =============================================================================
+# ILLUSTRATIVE FIXTURE -- DO NOT APPLY (issue #35)
+# =============================================================================
+# This is a plausible, clearly-synthetic example of a risky AI-generated change.
+# It is NEVER applied to the codebase; it exists only to make the VibeGuard
+# motivation concrete (see demos/README.md). It widens the unsafe baseline's
+# fallback refund amount by three orders of magnitude -- so a refund issued on a
+# missing/garbage invoice would move $100,000 instead of $149.
+#
+# Why today's CI (tests.yml + the placeholder vibeguard.yml) would MERGE this:
+#   * tests.yml runs the unit tests, but the baseline characterization tests only
+#     assert the PRESENCE of unsafe behaviour (e.g. that a refund's status is
+#     "issued"); none of them pin the fallback amount, so widening it stays green.
+#   * vibeguard.yml only echoes a placeholder; no check inspects the diff for a
+#     safety regression before merge.
+# A VibeGuard pre-merge gate (issue #10) would add a check that flags edits which
+# widen a hardcoded money-movement amount or fallback bound.
+# =============================================================================
+diff --git a/enterprise_agent_control_plane/baseline_agent.py b/enterprise_agent_control_plane/baseline_agent.py
+--- a/enterprise_agent_control_plane/baseline_agent.py
++++ b/enterprise_agent_control_plane/baseline_agent.py
+@@ -195,7 +195,7 @@ class BaselineAgent:
+         if capability == "billing.issue_refund":
+-            amount = invoice.get("amount", 149.0) if isinstance(invoice, dict) else 149.0
++            amount = invoice.get("amount", 100000.0) if isinstance(invoice, dict) else 100000.0
+             return tool(invoice_id, amount, "customer requested")
