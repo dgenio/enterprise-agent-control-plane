@@ -3,6 +3,9 @@ name: vibeguard
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   vibeguard:
     runs-on: ubuntu-latest
