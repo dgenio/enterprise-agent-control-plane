@@ -1,7 +1,7 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 
-@dataclass
+@dataclass(frozen=True)
 class LessonCandidate:
     failure_id: str
     summary: str
@@ -18,9 +18,9 @@ class LessonWeaverStub:
         self._candidates.append(LessonCandidate(failure_id=failure_id, summary=summary, reviewed=False))
 
     def mark_reviewed(self, failure_id: str) -> None:
-        for item in self._candidates:
+        for i, item in enumerate(self._candidates):
             if item.failure_id == failure_id:
-                item.reviewed = True
+                self._candidates[i] = replace(item, reviewed=True)
 
     def reviewed_lessons(self) -> list[LessonCandidate]:
         return [x for x in self._candidates if x.reviewed]

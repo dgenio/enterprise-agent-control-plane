@@ -2,11 +2,15 @@ import json
 import unittest
 from pathlib import Path
 
+from enterprise_agent_control_plane import fake_tools
 from enterprise_agent_control_plane.baseline_agent import BaselineAgent
 from enterprise_agent_control_plane.governed_agent import GovernedAgent
 
 
 class TestBaselineVsGoverned(unittest.TestCase):
+    def setUp(self):
+        fake_tools.reset_state()
+
     def test_baseline_exposes_full_catalog_and_attempts_risky_action(self):
         result = BaselineAgent().run_case("C-100", "INV-9")
         self.assertEqual(result["mode"], "unsafe")

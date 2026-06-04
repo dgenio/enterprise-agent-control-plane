@@ -5,6 +5,9 @@ from enterprise_agent_control_plane.flows import ChainWeaverExecutor
 
 
 class TestFlows(unittest.TestCase):
+    def setUp(self):
+        fake_tools.reset_state()
+
     def test_refund_review_flow_is_deterministic(self):
         tools = {
             "crm.search_customer": fake_tools.crm_search_customer,

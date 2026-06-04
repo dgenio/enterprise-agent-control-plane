@@ -18,6 +18,13 @@ TASKS: list[dict[str, Any]] = []
 REFUNDS: list[dict[str, Any]] = []
 
 
+def reset_state() -> None:
+    """Clear module-level mutable state for test isolation."""
+    SENT_EMAILS.clear()
+    TASKS.clear()
+    REFUNDS.clear()
+
+
 def crm_search_customer(customer_id: str) -> dict[str, Any]:
     return CUSTOMERS.get(customer_id, {"error": "not_found", "customer_id": customer_id})
 
