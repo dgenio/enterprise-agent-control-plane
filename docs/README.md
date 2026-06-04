@@ -1,9 +1,9 @@
 # Documentation
 
 **enterprise-agent-control-plane** is a runnable reference architecture for
-governed enterprise tool-using agents. It builds one Customer Operations agent
+governed enterprise tool-using agents. Build the same Customer Operations agent
 two ways — an unsafe baseline vs a bounded, policy-gated, auditable control
-plane — and runs the contrast offline. This page is the entry point to the
+plane — and run the contrast offline. This page is the entry point to the
 documentation; start here, then follow the links below.
 
 > Reference architecture and learning repository — **not** production security

@@ -12,12 +12,13 @@ reference-architecture (non-production) framing. Keep these in sync with
 
 ## Short paragraph (blog / LinkedIn intro)
 
-> enterprise-agent-control-plane is a runnable reference architecture that
-> builds the same Customer Operations agent two ways — an unsafe baseline vs a
-> bounded, policy-gated, auditable control plane — and runs the contrast
-> offline. It demonstrates bounded context shortlisting, deterministic flows,
-> capability tokens, an allow/deny/ask policy gate, and structured audit
-> traces. It is a learning/reference project, not production security software.
+> enterprise-agent-control-plane is a runnable reference architecture for
+> governed enterprise tool-using agents. Build the same Customer Operations
+> agent two ways — an unsafe baseline vs a bounded, policy-gated, auditable
+> control plane — and run the contrast offline. It demonstrates bounded context
+> shortlisting, deterministic flows, capability tokens, an allow/deny/ask
+> policy gate, and structured audit traces. It is a learning/reference project,
+> not production security software.
 
 ## Longer summary (directory submission)
 

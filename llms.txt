@@ -1,9 +1,9 @@
 # enterprise-agent-control-plane
 
 > Runnable reference architecture for governed enterprise tool-using agents:
-> bounded context, policy gates, audit traces. It builds one Customer
+> bounded context, policy gates, audit traces. Build the same Customer
 > Operations agent two ways — an unsafe baseline vs a bounded, policy-gated,
-> auditable control plane — and runs the contrast offline.
+> auditable control plane — and run the contrast offline.
 
 This is a reference architecture and learning repository, **not** production
 security software and not a hardening guide. All tools and data are synthetic.

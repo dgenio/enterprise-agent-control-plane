@@ -15,8 +15,8 @@ It is **not**:
 
 There is intentionally unsafe code in this repository (the "baseline" agent) so
 the contrast with the governed path is concrete. The fake tools and data
-(`fake_tools.py`, fixtures, sample logs) are illustrative only and contain no
-real credentials, PII, or live endpoints.
+(`enterprise_agent_control_plane/fake_tools.py`, fixtures, sample logs) are
+illustrative only and contain no real credentials, PII, or live endpoints.
 
 See the "What this repo is / is not" section of the [README](README.md) and the
 [FAQ](docs/faq.md) for the full framing.

@@ -6,10 +6,10 @@ machine-optimized version see [`llms.txt`](llms.txt); for definitions see the
 
 ## Purpose
 
-Runnable reference architecture for governed enterprise tool-using agents. It
-builds one Customer Operations agent two ways — an **unsafe baseline** vs a
-bounded, policy-gated, auditable **control plane** — and runs the contrast
-offline so the value of each governance control is concrete and measurable.
+Runnable reference architecture for governed enterprise tool-using agents.
+Build the same Customer Operations agent two ways — an **unsafe baseline** vs a
+bounded, policy-gated, auditable **control plane** — and run the contrast
+offline, so the value of each governance control is concrete and measurable.
 
 ## Audience
 
