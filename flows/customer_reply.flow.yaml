@@ -1,0 +1,6 @@
+flow_id: customer_reply
+steps:
+  - name: lookup_customer
+    capability: crm.search_customer
+  - name: draft_reply
+    capability: email.draft_reply

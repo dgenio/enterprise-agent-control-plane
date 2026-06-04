@@ -1,0 +1,39 @@
+{
+  "trace_id": "trace-C-100-INV-9",
+  "events": [
+    {
+      "ts": "2026-06-04T15:20:33.359692+00:00",
+      "actor": "agent",
+      "action": "shortlist",
+      "outcome": "ok",
+      "details": {
+        "capabilities": [
+          "billing.issue_refund",
+          "email.send_reply",
+          "email.draft_reply",
+          "crm.search_customer"
+        ]
+      }
+    },
+    {
+      "ts": "2026-06-04T15:20:33.359713+00:00",
+      "actor": "agent",
+      "action": "flow.execute",
+      "outcome": "ok",
+      "details": {
+        "flow_id": "refund_review",
+        "steps": 4
+      }
+    },
+    {
+      "ts": "2026-06-04T15:20:33.359722+00:00",
+      "actor": "agent",
+      "action": "policy.check",
+      "outcome": "blocked",
+      "details": {
+        "capability": "billing.issue_refund",
+        "decision": "ask"
+      }
+    }
+  ]
+}

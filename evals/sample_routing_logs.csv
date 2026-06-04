@@ -1,0 +1,4 @@
+case_id,query,candidate,decision,expected,match
+1,refund request,bounded_router_v2,billing.get_invoice,billing.get_invoice,true
+2,send direct email,keyword_router_v1,email.send_reply,email.draft_reply,false
+3,escalate repeated ticket,bounded_router_v2,support.create_task,support.create_task,true

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "enterprise-agent-control-plane"
+version = "0.1.0"
+description = "Runnable reference architecture for governed enterprise tool-using agents"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "dgenio" }]
+dependencies = []
+
+[tool.setuptools]
+packages = ["enterprise_agent_control_plane"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
