@@ -1,0 +1,27 @@
+name: evals
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-eval:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install package
+        run: make setup
+      - name: Run offline evaluation gate
+        # Scores candidate routers and policies against the committed golden datasets and
+        # fails the build on a regression (router accuracy below floor, or a flipped
+        # allow/deny/ask decision). Fully offline; no API keys or network.
+        run: make eval

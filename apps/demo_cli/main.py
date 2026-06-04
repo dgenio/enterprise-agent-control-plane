@@ -258,6 +258,21 @@ def main() -> None:
     print(f"  no approver       -> {governed['bounded_output']['action_status']}")
 
     print_contrast(baseline, governed)
+    print_eval_lane()
+
+
+def print_eval_lane() -> None:
+    """One-line summary of the offline evaluation lane (#7, #40)."""
+    from enterprise_agent_control_plane import evals
+
+    print("\n[4] Offline evaluation lane (scored before deployment; run `make eval`)")
+    for r in evals.evaluate_routers():
+        print(f"  router {r.candidate}: {r.score:.0%} ({r.notes})")
+    report = evals.evaluate_policy()
+    print(
+        f"  policy golden set: {report.accuracy:.0%} matched "
+        f"({report.total} cases, {len(report.unsafe_drift)} unsafe-drift)"
+    )
 
 
 if __name__ == "__main__":
