@@ -35,6 +35,41 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
 }
 
 
+# Intent -> governed flow (issue #25). The governed path makes a single deterministic
+# routing decision (which known workflow to run); the inner steps then execute with no
+# further per-step model routing.
+INTENT_FLOWS: dict[str, str] = {
+    "refund": "refund_review",
+    "reply": "customer_reply",
+    "escalation": "escalation",
+}
+
+
+def classify_intent(request: str) -> "str | None":
+    """Map a free-text request to a known intent, or ``None`` if unsupported."""
+    text = request.lower()
+    if "refund" in text:
+        return "refund"
+    if "escalat" in text or "ticket" in text:
+        return "escalation"
+    if "reply" in text or "email" in text or "send" in text:
+        return "reply"
+    return None
+
+
+def select_flow(request: str) -> "tuple[str | None, str | None]":
+    """Select one registered flow for a request via a single deterministic decision.
+
+    Returns ``(intent, flow_id)``. An unsupported request yields ``(None, None)`` so
+    the caller can surface an explicit "no matching governed flow" outcome rather than
+    defaulting silently (issue #25).
+    """
+    intent = classify_intent(request)
+    if intent is None:
+        return None, None
+    return intent, INTENT_FLOWS.get(intent)
+
+
 class ChainWeaverExecutor:
     """ChainWeaver-style deterministic runner with no LLM between steps."""
 
