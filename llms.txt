@@ -1,0 +1,63 @@
+# enterprise-agent-control-plane
+
+> Runnable reference architecture for governed enterprise tool-using agents:
+> bounded context, policy gates, audit traces. It builds one Customer
+> Operations agent two ways — an unsafe baseline vs a bounded, policy-gated,
+> auditable control plane — and runs the contrast offline.
+
+This is a reference architecture and learning repository, **not** production
+security software and not a hardening guide. All tools and data are synthetic.
+
+## Audience
+
+Platform and engineering teams, security teams, AI/data leaders, and
+consultants evaluating governance patterns for tool-using agents.
+
+## Architecture
+
+- Unsafe baseline: full tool catalog every step, raw outputs forwarded into
+  context, write/destructive actions with no policy gate, flat free-text logs.
+- Governed control plane: bounded capability shortlist, deterministic flows,
+  capability tokens, allow/deny/ask policy gate, bounded output frame, and a
+  structured audit trace.
+- The demo runs both on the same scenario and prints a side-by-side contrast.
+
+## dgenio ecosystem mapping (patterns demonstrated locally)
+
+- contextweaver — bounded shortlist / context firewall (`catalog.py`)
+- ChainWeaver — deterministic flow executor (`flows.py`)
+- agent-kernel — capability tokens / authorization (`policies.py`, governed path)
+- AgentFence — allow/deny/ask policy gate (`policies.py`)
+- skdr-eval — offline evaluation lane (`evals.py`, `evals/`)
+- lessonweaver — reviewed lessons (`lessons.py`)
+- VibeGuard — CI guardrails for AI-generated changes (`.github/workflows/vibeguard.yml`)
+
+## Commands
+
+- `make setup` — install the package (editable, only dependency is pydantic).
+- `make demo` — run the baseline-vs-governed demo offline.
+- `make test` — run the unit test suite (`unittest`).
+
+## Key paths
+
+- `enterprise_agent_control_plane/` — the package (baseline + governed agents).
+- `apps/demo_cli/main.py` — the runnable demo entry point.
+- `flows/` — flow definitions. `policies/` — policy definitions.
+- `evals/` — offline evaluation data. `traces/` — emitted run artifacts.
+- `demos/` — inert illustrative fixtures. `docs/` — documentation.
+
+## Documentation
+
+- [Docs index](docs/README.md)
+- [Glossary](docs/glossary.md)
+- [Architecture](docs/architecture.md)
+- [Governance model](docs/governance-model.md)
+- [FAQ](docs/faq.md)
+- [Adoption path](docs/adoption-path.md)
+- [Comparison](docs/comparison.md)
+
+## Limitations
+
+No production-readiness or security guarantees. The model is replaced by a
+deterministic offline router for reproducibility; the governed-side libraries
+above are demonstrated as local patterns, not consumed as live dependencies.
