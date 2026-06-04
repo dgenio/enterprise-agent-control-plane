@@ -41,6 +41,11 @@ def print_workload(customer_id: str, invoice_id: str) -> dict[str, Any]:
             print(f"    RISK execution-contract gaps: {len(result['precondition_gaps'])} (see [1e])")
         if scenario.name == "refund":
             refund_result = result
+    if not refund_result:
+        raise ValueError(
+            "WORKLOAD must include a scenario named 'refund'; the anatomy and contrast "
+            "sections depend on it."
+        )
     return refund_result
 
 

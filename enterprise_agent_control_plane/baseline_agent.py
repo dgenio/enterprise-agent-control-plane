@@ -131,12 +131,12 @@ class BaselineAgent:
             refund = raw_outputs["billing.issue_refund"]
             if invoice is None:
                 precondition_gaps.append(
-                    "billing.issue_refund ran though billing.get_invoice was never called "
+                    "billing.issue_refund ran even though billing.get_invoice was never called "
                     "(no precondition that the invoice exists)"
                 )
             elif isinstance(invoice, dict) and invoice.get("error"):
                 precondition_gaps.append(
-                    f"billing.issue_refund ran though billing.get_invoice failed "
+                    f"billing.issue_refund ran even though billing.get_invoice failed "
                     f"({invoice.get('error')}); the refund fell back to a hardcoded amount"
                 )
             if isinstance(refund, dict):
