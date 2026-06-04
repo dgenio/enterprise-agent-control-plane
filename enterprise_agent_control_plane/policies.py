@@ -1,3 +1,5 @@
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Iterable, Literal, Optional
@@ -57,6 +59,37 @@ class AgentFencePolicy:
     ):
         self.refund_auto_limit = refund_auto_limit
         self.refund_manager_limit = refund_manager_limit
+
+    # --- Decision provenance (issue #70) --------------------------------------
+    def thresholds(self) -> dict[str, float]:
+        """The effective threshold values that shape parameter-aware decisions."""
+        return {
+            "refund_auto_limit": self.refund_auto_limit,
+            "refund_manager_limit": self.refund_manager_limit,
+        }
+
+    @property
+    def version(self) -> str:
+        """A stable identifier derived from the ruleset and threshold content (issue #70).
+
+        Hashing the static rules (action classes, principal restrictions) together with the
+        instance thresholds means the version changes whenever the policy that produced a
+        decision changes -- so two traces are comparable and a trace is replayable against a
+        named policy version. This is reference provenance, not signing.
+        """
+        payload = json.dumps(
+            {
+                "action_classes": ACTION_CLASSES,
+                "principal_restricted": {k: sorted(v) for k, v in PRINCIPAL_RESTRICTED.items()},
+                "thresholds": self.thresholds(),
+            },
+            sort_keys=True,
+        )
+        return "af-" + hashlib.sha256(payload.encode("utf-8")).hexdigest()[:12]
+
+    def provenance(self) -> dict[str, Any]:
+        """The provenance stamp recorded alongside each policy decision (issue #70)."""
+        return {"policy_version": self.version, "thresholds": self.thresholds()}
 
     def evaluate(
         self,

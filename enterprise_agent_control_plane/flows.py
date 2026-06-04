@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Optional
 
 
 @dataclass(frozen=True)
@@ -81,10 +81,38 @@ class ChainWeaverExecutor:
     def __init__(self, tools: dict[str, Callable[..., Any]]):
         self.tools = tools
 
-    def run(self, flow_id: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
+    def run(
+        self,
+        flow_id: str,
+        payload: dict[str, Any],
+        token_check: Optional[Callable[[str], bool]] = None,
+        on_step: Optional[Callable[[dict[str, Any]], None]] = None,
+    ) -> list[dict[str, Any]]:
+        """Run a flow deterministically, optionally gating each step on a capability token.
+
+        ``token_check`` (issue #111) is consulted before a step runs: a step whose
+        capability the principal does not hold a token for *fails closed* -- the tool is not
+        invoked, and the step record is marked ``token_valid=False`` with a blocked status.
+        ``on_step`` is called once per step (executed or blocked) so the caller can record a
+        per-step audit event. With neither argument the runner behaves as a plain executor.
+        """
         flow = FLOW_REGISTRY[flow_id]
         results: list[dict[str, Any]] = []
         for step in flow.steps:
+            token_valid = True if token_check is None else token_check(step.capability)
+            if not token_valid:
+                # Fail closed: no token, so the tool never runs (issue #111).
+                record = {
+                    "step": step.name,
+                    "capability": step.capability,
+                    "output": None,
+                    "token_valid": False,
+                    "status": "blocked_no_token",
+                }
+                results.append(record)
+                if on_step is not None:
+                    on_step(record)
+                continue
             if step.capability == "crm.search_customer":
                 out = self.tools[step.capability](payload["customer_id"])
             elif step.capability == "billing.get_invoice":
@@ -99,5 +127,14 @@ class ChainWeaverExecutor:
                 out = self.tools[step.capability](payload["customer_id"], "Escalated by governed flow")
             else:
                 out = {"error": "unknown_step"}
-            results.append({"step": step.name, "capability": step.capability, "output": out})
+            record = {
+                "step": step.name,
+                "capability": step.capability,
+                "output": out,
+                "token_valid": True,
+                "status": "ok",
+            }
+            results.append(record)
+            if on_step is not None:
+                on_step(record)
         return results

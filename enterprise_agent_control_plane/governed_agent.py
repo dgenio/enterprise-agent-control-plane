@@ -1,3 +1,4 @@
+import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -89,7 +90,7 @@ class GovernedAgent:
                 f"{principal} holds no valid capability token for {capability}.", False,
             )
             if trace is not None:
-                trace.record(principal, "policy.decision", "denied", decision.as_dict())
+                trace.record(principal, "policy.decision", "denied", self._policy_event_details(decision))
             return decision
 
         policy_decision = self.policy.evaluate(capability, principal, args)
@@ -99,8 +100,30 @@ class GovernedAgent:
             policy_decision.decision, outcome, reason, True,
         )
         if trace is not None:
-            trace.record(principal, "policy.decision", outcome, decision.as_dict())
+            trace.record(principal, "policy.decision", outcome, self._policy_event_details(decision))
         return decision
+
+    def _policy_event_details(self, decision: GovernedDecision) -> dict[str, Any]:
+        """Decision payload stamped with the deciding policy's provenance (issue #70)."""
+        provenance = self.policy.provenance()
+        return {
+            **decision.as_dict(),
+            "policy_version": provenance["policy_version"],
+            "policy_thresholds": provenance["thresholds"],
+        }
+
+    @staticmethod
+    def _result_ref(record: dict[str, Any]) -> Optional[str]:
+        """A bounded reference to a step's output -- a content digest, not the raw payload.
+
+        Keeping a short hash rather than the raw output in the trace means a per-step event
+        is attributable without leaking the sensitive fields the bounded frame redacts.
+        """
+        output = record.get("output")
+        if output is None:
+            return None
+        canonical = json.dumps(output, sort_keys=True, default=str)
+        return f"{record['step']}#{hashlib.sha256(canonical.encode('utf-8')).hexdigest()[:8]}"
 
     def _resolve(
         self,
@@ -180,13 +203,33 @@ class GovernedAgent:
             "reason": f"keyword shortlist for intent {intent!r}; full catalog kept out of model context",
         })
 
-        flow_results = self.executor.run(
-            flow_id, {"customer_id": customer_id, "invoice_id": invoice_id, "customer_name": "Ari Carter"}
-        )
         trace.record(principal, "flow.select", "ok",
                      {"intent": intent, "flow_id": flow_id,
                       "reason": f"intent {intent!r} maps to deterministic flow {flow_id!r}"})
-        trace.record(principal, "flow.execute", "ok", {"flow_id": flow_id, "steps": len(flow_results)})
+
+        # Each flow step is token-checked and recorded as its own audit event so the trace
+        # explains the run step-by-step, and read steps are subject to the same
+        # least-privilege token check as the gated write (issue #111).
+        tokens = issue_tokens(principal)
+
+        def _on_step(record: dict[str, Any]) -> None:
+            outcome = "ok" if record["token_valid"] else "blocked_no_token"
+            trace.record(principal, "flow.step", outcome, {
+                "step": record["step"],
+                "capability": record["capability"],
+                "token_valid": record["token_valid"],
+                "result_ref": self._result_ref(record),
+            })
+
+        flow_results = self.executor.run(
+            flow_id,
+            {"customer_id": customer_id, "invoice_id": invoice_id, "customer_name": "Ari Carter"},
+            token_check=lambda cap: holds_capability(tokens, cap),
+            on_step=_on_step,
+        )
+        executed = [r for r in flow_results if r["status"] == "ok"]
+        trace.record(principal, "flow.execute", "ok",
+                     {"flow_id": flow_id, "steps": len(executed), "blocked": len(flow_results) - len(executed)})
 
         # Gate the risky action for this intent with a parameter-aware decision.
         gated_capability = GATED_ACTION[intent]

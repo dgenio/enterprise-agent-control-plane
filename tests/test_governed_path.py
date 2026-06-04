@@ -4,6 +4,7 @@ from pathlib import Path
 
 from enterprise_agent_control_plane import fake_tools
 from enterprise_agent_control_plane.governed_agent import GovernedAgent
+from enterprise_agent_control_plane.policies import AgentFencePolicy
 
 
 class TestGovernedPath(unittest.TestCase):
@@ -62,12 +63,65 @@ class TestGovernedPath(unittest.TestCase):
         )
         self.assertEqual(rejected["bounded_output"]["action_status"], "approval_denied")
 
+    # --- per-step audit events + token check (issue #111) ---------------------
+    def test_each_flow_step_is_a_token_checked_audit_event(self):
+        result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
+        steps = [e for e in result["trace"].as_dict()["events"] if e["action"] == "flow.step"]
+        # refund_review runs its four steps in order, each a token-checked event.
+        self.assertEqual(
+            [e["details"]["step"] for e in steps],
+            ["lookup_customer", "lookup_invoice", "check_policy", "draft_reply"],
+        )
+        for event in steps:
+            self.assertTrue(event["details"]["token_valid"])
+            self.assertEqual(event["outcome"], "ok")
+
+    def test_missing_token_fails_step_closed(self):
+        # billing_admin holds crm.search_customer / billing.get_invoice / billing.issue_refund
+        # but NOT docs.search_policy or email.draft_reply, so those refund_review steps must
+        # be blocked with no tool run (issue #111).
+        result = self.agent.run_case("refund request", "C-100", "INV-9", principal="billing_admin")
+        steps = {e["details"]["step"]: e for e in result["trace"].as_dict()["events"] if e["action"] == "flow.step"}
+        self.assertTrue(steps["lookup_customer"]["details"]["token_valid"])
+        for blocked in ("check_policy", "draft_reply"):
+            self.assertFalse(steps[blocked]["details"]["token_valid"])
+            self.assertEqual(steps[blocked]["outcome"], "blocked_no_token")
+            # Fail closed: no tool ran, so there is no bounded result reference.
+            self.assertIsNone(steps[blocked]["details"]["result_ref"])
+
+    # --- policy provenance on decisions (issue #70) ---------------------------
+    def test_policy_decision_records_provenance(self):
+        result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
+        decision = next(e for e in result["trace"].as_dict()["events"] if e["action"] == "policy.decision")
+        self.assertTrue(decision["details"]["policy_version"].startswith("af-"))
+        self.assertEqual(decision["details"]["policy_thresholds"]["refund_auto_limit"], 50.0)
+
+    def test_changing_a_threshold_changes_recorded_policy_version(self):
+        base = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
+        loosened = GovernedAgent(policy=AgentFencePolicy(refund_auto_limit=999.0)).run_case(
+            "refund request", "C-100", "INV-9", principal="support_agent"
+        )
+
+        def version(result):
+            return next(
+                e["details"]["policy_version"]
+                for e in result["trace"].as_dict()["events"]
+                if e["action"] == "policy.decision"
+            )
+
+        self.assertNotEqual(version(base), version(loosened))
+
     # --- explainable trace + case export (issue #27) --------------------------
     def test_trace_is_explainable_and_exportable(self):
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
-        actions = [e["action"] for e in result["trace"].as_dict()["events"]]
+        trace = result["trace"]
+        actions = [e["action"] for e in trace.as_dict()["events"]]
         for expected in ("request.received", "shortlist", "flow.select", "policy.decision", "output.frame"):
             self.assertIn(expected, actions)
+        # The completed run validates against the schema and its hash chain verifies
+        # (issues #112, #39).
+        self.assertTrue(trace.validate(require_complete=True).ok)
+        self.assertTrue(trace.verify())
 
         export = self.agent.export_case(result["trace"], principal="support_manager")
         self.assertEqual(export["decision"]["outcome"], "allowed")
