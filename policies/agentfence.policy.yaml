@@ -1,7 +1,36 @@
-rules:
-  - capability: billing.issue_refund
-    decision: ask
-  - capability: email.send_reply
-    decision: ask
-  - capability: audit.export_case
-    decision: deny_unless_supervisor
+# AgentFence-style policy: action-class-driven with a deny-by-default posture
+# (issues #2, #36). NOTE: the runtime currently reads the equivalent rules from
+# enterprise_agent_control_plane/policies.py; unifying YAML as the single source of
+# truth is tracked separately in issue #3.
+
+# How each action class is decided.
+action_classes:
+  read: allow
+  write: ask
+  destructive: threshold
+
+# Capability -> action class.
+capabilities:
+  crm.search_customer: read
+  billing.get_invoice: read
+  support.search_tickets: read
+  docs.search_policy: read
+  email.draft_reply: read
+  audit.export_case: read          # read/export only, but principal-restricted below
+  support.create_task: write
+  email.send_reply: write
+  billing.issue_refund: destructive
+
+# Capabilities only specific principals may invoke, regardless of action class.
+restricted:
+  audit.export_case: [support_manager, supervisor]
+
+# Parameter-aware thresholds for destructive money movement (issue #36).
+thresholds:
+  billing.issue_refund:
+    auto_allow_at_or_below: 50.0
+    require_approval_at_or_below: 500.0
+    # above require_approval_at_or_below -> deny
+
+# Anything not classified above is denied.
+default: deny

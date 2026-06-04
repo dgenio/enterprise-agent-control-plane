@@ -1,12 +1,38 @@
+# Principals and the scoped capability tokens each role is granted (issue #23).
+# Each granted capability is issued as a scoped, optionally-expiring token; a principal
+# must hold a valid token for a capability before any policy evaluation runs. NOTE:
+# mirrored in enterprise_agent_control_plane/policies.py (ROLE_GRANTS); runtime
+# unification is tracked in issue #3.
+
+defaults:
+  scope: customer-operations
+  issuer: control-plane
+  expires: null   # null = non-expiring (demo default)
+
 principals:
-  agent:
-    allow:
+  support_agent:
+    grants:
       - crm.search_customer
       - billing.get_invoice
       - support.search_tickets
-      - support.create_task
-      - email.draft_reply
       - docs.search_policy
-  supervisor:
-    allow:
+      - email.draft_reply
+      - email.send_reply
+      - support.create_task
+      - billing.issue_refund
+  support_manager:
+    grants:
+      - crm.search_customer
+      - billing.get_invoice
+      - support.search_tickets
+      - docs.search_policy
+      - email.draft_reply
+      - email.send_reply
+      - support.create_task
+      - billing.issue_refund
       - audit.export_case
+  billing_admin:
+    grants:
+      - crm.search_customer
+      - billing.get_invoice
+      - billing.issue_refund
