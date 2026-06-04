@@ -1,0 +1,44 @@
+name: Bug report
+description: Report a problem in the example code, demo, or tests.
+title: "fix: <short description>"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report a bug in the example code, the demo, or the tests. This is a
+        reference architecture with synthetic data — there is no production
+        system, so focus on the example code itself.
+  - type: textarea
+    id: expected_actual
+    attributes:
+      label: Expected vs actual behavior
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Exact commands (e.g. `make demo`, `make test`) and what to look for.
+      value: |
+        1.
+        2.
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Python version and OS.
+      placeholder: "Python 3.11, Ubuntu 24.04"
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant output
+      description: Paste any error output or failing assertion. It will be rendered as code.
+      render: shell
+    validations:
+      required: false
