@@ -74,6 +74,26 @@ class TestBaselineCharacterization(unittest.TestCase):
         self.assertIn("email.draft_reply", v2_caps)
         self.assertNotEqual(v1_caps, v2_caps)
 
+    def test_escalate_path_runs_create_task_as_policy_blind_write(self):
+        # Gap: support.create_task (a write) also runs with no policy decision (issue #17).
+        result = BaselineAgent(router=route_v1).run_case("escalate ticket", "C-100", "INV-9")
+        caps = [s["capability"] for s in result["steps"]]
+        self.assertIn("support.create_task", caps)
+        writes = [w["capability"] for w in result["policy_blind_writes"]]
+        self.assertIn("support.create_task", writes)
+
+    def test_email_send_is_policy_blind_but_draft_is_not(self):
+        # Gap: email.send_reply is a policy-blind write; email.draft_reply is intentionally
+        # excluded from WRITE_OR_DESTRUCTIVE because drafting has no external side effect.
+        sent = BaselineAgent(router=route_v1).run_case("send direct email reply", "C-100", "INV-9")
+        sent_writes = [w["capability"] for w in sent["policy_blind_writes"]]
+        self.assertIn("email.send_reply", sent_writes)
+
+        fake_tools.reset_state()
+        drafted = BaselineAgent(router=route_v2).run_case("send direct email reply", "C-100", "INV-9")
+        draft_writes = [w["capability"] for w in drafted["policy_blind_writes"]]
+        self.assertNotIn("email.draft_reply", draft_writes)
+
 
 if __name__ == "__main__":
     unittest.main()

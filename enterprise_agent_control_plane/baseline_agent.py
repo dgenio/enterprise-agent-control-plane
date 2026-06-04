@@ -1,4 +1,4 @@
-from typing import Any, Sequence
+from typing import Any
 
 from .baseline_router import Router, route_v1
 from .catalog import build_tool_definitions, context_size, serialize_tool_catalog
@@ -25,7 +25,11 @@ REQUIRED_FIELDS: dict[str, set[str]] = {
     "audit.export_case": {"case_id", "export_status"},
 }
 
-MAX_STEPS = 8
+# Loop safety bound so the router can never spin forever. Set to the full catalog
+# size (9 tools) so that even a future request that legitimately walked every
+# capability once would not be silently truncated; today's deterministic paths end
+# (router returns None) in at most 3 steps, well before this.
+MAX_STEPS = 9
 
 
 class BaselineAgent:

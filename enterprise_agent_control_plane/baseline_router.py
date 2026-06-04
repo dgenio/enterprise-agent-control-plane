@@ -16,19 +16,6 @@ score the change that was shipped blind.
 
 from typing import Callable, Sequence
 
-# The full tool surface the router "sees" on every turn -- no shortlist is applied.
-FULL_CATALOG: tuple[str, ...] = (
-    "crm.search_customer",
-    "billing.get_invoice",
-    "billing.issue_refund",
-    "support.search_tickets",
-    "support.create_task",
-    "email.draft_reply",
-    "email.send_reply",
-    "docs.search_policy",
-    "audit.export_case",
-)
-
 Router = Callable[[str, Sequence[str]], "str | None"]
 
 
