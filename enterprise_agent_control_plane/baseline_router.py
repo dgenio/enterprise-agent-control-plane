@@ -23,12 +23,17 @@ Several variants exist on purpose:
   directive in fetched tool data steer a write (issue #31).
 """
 
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Mapping, Protocol, Sequence
+
 
 # A router sees the request, the capabilities already called, and the accumulated raw
-# tool output keyed by capability. ``context`` defaults to empty so simple variants and
-# direct callers can ignore it.
-Router = Callable[[str, Sequence[str], Mapping[str, Any]], "str | None"]
+# tool output keyed by capability. ``context`` is optional so simple variants and direct
+# callers can ignore it; a Protocol (rather than a Callable alias) lets that optional
+# third parameter be expressed accurately.
+class Router(Protocol):
+    def __call__(
+        self, request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None
+    ) -> "str | None": ...
 
 
 def route_v1(request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None) -> "str | None":
@@ -98,7 +103,7 @@ def route_greedy(request: str, called: Sequence[str], context: "Mapping[str, Any
         return None
 
     # Anything non-billing falls back to the ordinary v1 behaviour.
-    return _route(text, called, email_capability="email.send_reply")
+    return _route(request, called, email_capability="email.send_reply")
 
 
 def _looks_like_refund_directive(context: "Mapping[str, Any]") -> bool:

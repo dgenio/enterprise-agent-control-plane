@@ -144,6 +144,14 @@ class BaselineAgent:
                     f"refund amount {refund.get('amount')} was never bounded or checked "
                     "against the invoice total"
                 )
+            # No refundability check (issue #32 lists this among the missing checks): the
+            # invoice's status was never validated as refundable, so an already-refunded or
+            # otherwise non-refundable invoice would still be refunded.
+            invoice_status = invoice.get("status") if isinstance(invoice, dict) else None
+            precondition_gaps.append(
+                f"invoice refundability was never checked (status={invoice_status!r}): "
+                "a non-refundable or already-refunded invoice would be refunded anyway"
+            )
             precondition_gaps.append(
                 "no idempotency guard on billing.issue_refund: re-running the same case "
                 "appends another refund"

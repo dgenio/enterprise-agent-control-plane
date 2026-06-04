@@ -131,7 +131,7 @@ def print_injection(customer_id: str, invoice_id: str) -> None:
     print(f"  request: {request!r} (a benign read; no write was authorized)")
     print(f"  route picked: {caps}")
     planted = next(
-        (t["agent_comments"] for t in fake_tools.TICKETS[customer_id] if "refund" in t["agent_comments"].lower()),
+        (t["agent_comments"] for t in fake_tools.TICKETS.get(customer_id, []) if "refund" in t["agent_comments"].lower()),
         "",
     )
     print(f"  planted (untrusted) ticket text: {planted!r}")
