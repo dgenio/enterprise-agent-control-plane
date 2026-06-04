@@ -1,0 +1,42 @@
+name: Docs / discoverability improvement
+description: Improve documentation, positioning, or how the repo is found and understood.
+title: "docs: <short description>"
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for documentation, README/positioning, glossary/FAQ, or
+        discoverability (metadata, listings) improvements.
+  - type: textarea
+    id: gap
+    attributes:
+      label: What's missing or unclear
+      description: Which doc/page/metadata is affected, and what is wrong or absent?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should the doc say or how should it be structured?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: Claims stay consistent with what the code actually does.
+          required: true
+        - label: Preserves the reference-architecture (non-production) framing.
+          required: true

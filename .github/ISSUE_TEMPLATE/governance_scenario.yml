@@ -1,0 +1,50 @@
+name: New governance scenario
+description: Propose a new baseline gap or governed control to demonstrate.
+title: "feat: <short description of the scenario>"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this for a new before/after scenario — a baseline gap to surface or
+        a governed control to demonstrate. Keep it offline and synthetic.
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What pattern or risk should this scenario show, and why does it matter?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What should the demo, code, or docs show once this lands?
+    validations:
+      required: true
+  - type: input
+    id: maps_to
+    attributes:
+      label: Maps to
+      description: Which module(s) and dgenio library does this relate to (e.g. policies.py / AgentFence)?
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, checkable bullets describing "done".
+      value: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: This stays offline and uses only synthetic data.
+          required: true
+        - label: This does not introduce production-readiness or security claims.
+          required: true

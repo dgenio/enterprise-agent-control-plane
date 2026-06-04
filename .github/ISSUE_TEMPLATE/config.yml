@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/dgenio/enterprise-agent-control-plane/blob/main/docs/README.md
+    about: Read the docs index, glossary, and FAQ before opening an issue.
+  - name: Questions & discussion
+    url: https://github.com/dgenio/enterprise-agent-control-plane/discussions
+    about: For open-ended questions about agent governance patterns.
