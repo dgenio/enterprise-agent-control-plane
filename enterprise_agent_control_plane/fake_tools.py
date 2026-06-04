@@ -1,16 +1,48 @@
 from typing import Any
 
 
+# NOTE: every value below is obviously synthetic ("[FAKE]" / example.com). The extra
+# internal-style fields (notes, risk flags, payment fragments, history) exist so the
+# unsafe baseline has something realistic to over-expose: it forwards these complete
+# records into model context verbatim, with no field projection (issue #16). The
+# governed path's bounded Frame would project only task-relevant fields instead.
 CUSTOMERS = {
-    "C-100": {"customer_id": "C-100", "name": "Ari Carter", "tier": "gold", "email": "ari@example.com"},
+    "C-100": {
+        "customer_id": "C-100",
+        "name": "Ari Carter",
+        "tier": "gold",
+        "email": "ari@example.com",
+        "phone": "[FAKE] +1-555-0100",
+        "internal_notes": "[FAKE] flagged as repeat refund requester; watch for abuse",
+        "risk_flags": ["[FAKE] chargeback_history", "[FAKE] manual_review"],
+        "payment_method": "[FAKE] card ****-****-****-4242",
+        "account_history": ["[FAKE] 2023-01 opened account", "[FAKE] 2024-06 refunded $50"],
+    },
 }
 
 INVOICES = {
-    "INV-9": {"invoice_id": "INV-9", "customer_id": "C-100", "amount": 149.0, "status": "paid"},
+    "INV-9": {
+        "invoice_id": "INV-9",
+        "customer_id": "C-100",
+        "amount": 149.0,
+        "status": "paid",
+        "payment_method": "[FAKE] card ****-****-****-4242",
+        "billing_address": "[FAKE] 1 Example Way, Springfield",
+        "internal_margin": "[FAKE] 0.62",
+        "fraud_score": "[FAKE] 0.08",
+    },
 }
 
 TICKETS = {
-    "C-100": [{"ticket_id": "T-7", "subject": "Late shipment", "status": "closed"}],
+    "C-100": [
+        {
+            "ticket_id": "T-7",
+            "subject": "Late shipment",
+            "status": "closed",
+            "agent_comments": "[FAKE] customer was rude; consider goodwill credit",
+            "internal_priority": "[FAKE] P3",
+        }
+    ],
 }
 
 SENT_EMAILS: list[dict[str, Any]] = []
