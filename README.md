@@ -5,7 +5,50 @@
 [![python: >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![status: reference architecture](https://img.shields.io/badge/status-reference%20architecture-6f42c1.svg)](README.md#disclaimer)
 
-Runnable reference architecture for governed enterprise tool-using agents, contrasting an unsafe baseline against a bounded, policy-gated, auditable control-plane path.
+Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces.
+
+Build the same Customer Operations agent two ways — an unsafe baseline vs a bounded, policy-gated, auditable **control plane** — and run the contrast offline.
+
+## Who this is for
+
+Platform and engineering teams, security teams, AI/data leaders, and consultants evaluating **agent governance** patterns for **tool-using agents** and **MCP** tools — anyone who needs bounded context, policy enforcement, and auditability before letting agents touch internal tools.
+
+## What you get
+
+- **Bounded context** — a capability shortlist instead of the full tool catalog.
+- **Deterministic flows** — known business paths compiled out of the model loop.
+- **Policy gate** — allow/deny/ask decisions with capability tokens (least privilege).
+- **Audit trace** — a structured, queryable record of every governed run.
+- **Offline evaluation** — score routing/policy changes before enabling them.
+- A runnable **before/after** demo that prints a side-by-side contrast.
+
+## Quickstart
+
+```bash
+make setup
+make demo
+make test
+```
+
+## What this repo is / is not
+
+**It is:**
+
+- a runnable **reference architecture** for governed tool-using agents,
+- a **before/after governance demo** (unsafe baseline vs governed control plane),
+- a teaching, consulting, and portfolio artifact.
+
+**It is not:**
+
+- production security software or a hardened gateway,
+- a hosted agent/MCP gateway or a drop-in library,
+- a source of any security guarantee.
+
+## When to use it / when not to
+
+**Use it when** you are evaluating agent-governance patterns, running a workshop, building an internal reference, or explaining the value of bounded context, policy gates, and audit traces.
+
+**Don't use it** to secure a live production agent as-is — the tools and data are synthetic, the model is a deterministic offline stand-in, and there are no security guarantees.
 
 ## Problem statement
 
@@ -27,14 +70,6 @@ flowchart LR
     G --> AU[Audit trace]
     G --> EV[skdr-eval offline comparison]
     G --> LW[lessonweaver reviewed lessons]
-```
-
-## Quickstart
-
-```bash
-make setup
-make demo
-make test
 ```
 
 ## Demo walkthrough
@@ -100,6 +135,18 @@ Planned:
 - production-grade integrations for each dgenio library,
 - richer policy language and approval orchestration,
 - expanded replay/evaluation datasets.
+
+## Documentation
+
+Start at the [documentation index](docs/README.md). Highlights:
+
+- [Glossary](docs/glossary.md) — canonical definitions, linked to the code.
+- [FAQ](docs/faq.md) — common agent-governance questions answered directly.
+- [Recommended adoption path](docs/adoption-path.md) — layer the controls one at a time.
+- [Comparison](docs/comparison.md) — how this relates to neighboring approaches.
+
+How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security scope and
+reporting: [`SECURITY.md`](SECURITY.md).
 
 ## Disclaimer
 
