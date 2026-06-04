@@ -21,9 +21,9 @@ class TestErrorPaths(unittest.TestCase):
         self.assertEqual(result["invoice_id"], "BAD-ID")
 
     def test_baseline_agent_with_unknown_ids(self):
-        result = BaselineAgent().run_case("UNKNOWN", "BAD-ID")
-        self.assertEqual(result["raw_outputs"]["customer"]["error"], "not_found")
-        self.assertEqual(result["raw_outputs"]["invoice"]["error"], "not_found")
+        result = BaselineAgent().run_case("refund request", "UNKNOWN", "BAD-ID")
+        self.assertEqual(result["raw_outputs"]["crm.search_customer"]["error"], "not_found")
+        self.assertEqual(result["raw_outputs"]["billing.get_invoice"]["error"], "not_found")
 
     def test_support_search_no_tickets(self):
         result = fake_tools.support_search_tickets("UNKNOWN")
