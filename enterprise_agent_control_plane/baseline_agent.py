@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from .baseline_router import Router, route_v1
@@ -71,7 +72,10 @@ class BaselineAgent:
         policy_blind_writes: list[dict[str, Any]] = []
 
         while len(steps) < MAX_STEPS:
-            capability = self.router(request, called)
+            # The router sees the accumulated raw output too: the baseline has no
+            # boundary between operator intent and tool data, so injected text can steer
+            # it (issue #31).
+            capability = self.router(request, called, raw_outputs)
             if capability is None:
                 break
 
@@ -85,12 +89,20 @@ class BaselineAgent:
             raw_outputs[capability] = output
             leaked_fields[capability] = _excess_fields(capability, output)
 
+            # Cumulative model-visible context grows every step: the whole catalog is
+            # re-offered AND every raw output is retained (issue #42). ``context_chars``
+            # stays the flat catalog-only figure from #15; this is the compounding cost.
+            accumulated = catalog_context + json.dumps(raw_outputs, default=str)
+            cumulative = context_size(accumulated)
+
             steps.append(
                 {
                     "step": len(steps) + 1,
                     "capability": capability,
                     "tools_offered": tools_offered,
                     "context_chars": size["chars"],
+                    "cumulative_context_chars": cumulative["chars"],
+                    "cumulative_approx_tokens": cumulative["approx_tokens"],
                     "output": output,
                 }
             )
@@ -110,6 +122,39 @@ class BaselineAgent:
                 )
                 logs.append(f"[baseline] executed {capability} with no policy or approval check")
 
+        # Execution-contract gaps (issue #32): a destructive refund that ran with no
+        # successful precondition, no amount bound, no refundability check, and no
+        # idempotency guard. The presence of any entry is the demonstrated gap.
+        precondition_gaps: list[str] = []
+        if "billing.issue_refund" in raw_outputs:
+            invoice = raw_outputs.get("billing.get_invoice")
+            refund = raw_outputs["billing.issue_refund"]
+            if invoice is None:
+                precondition_gaps.append(
+                    "billing.issue_refund ran though billing.get_invoice was never called "
+                    "(no precondition that the invoice exists)"
+                )
+            elif isinstance(invoice, dict) and invoice.get("error"):
+                precondition_gaps.append(
+                    f"billing.issue_refund ran though billing.get_invoice failed "
+                    f"({invoice.get('error')}); the refund fell back to a hardcoded amount"
+                )
+            if isinstance(refund, dict):
+                precondition_gaps.append(
+                    f"refund amount {refund.get('amount')} was never bounded or checked "
+                    "against the invoice total"
+                )
+            precondition_gaps.append(
+                "no idempotency guard on billing.issue_refund: re-running the same case "
+                "appends another refund"
+            )
+
+        # Per-step cumulative context size (issue #42), so the growth curve is inspectable.
+        context_growth = [
+            {"step": s["step"], "cumulative_context_chars": s["cumulative_context_chars"]}
+            for s in steps
+        ]
+
         return {
             "mode": "unsafe",
             "request": request,
@@ -117,6 +162,8 @@ class BaselineAgent:
             "tools_offered_each_step": tools_offered,
             "full_catalog_context_chars": size["chars"],
             "approx_context_tokens": size["approx_tokens"],
+            "context_growth": context_growth,
+            "precondition_gaps": precondition_gaps,
             "steps": steps,
             # The sequence is re-decided by the "model" each step yet is identical across
             # runs -- a deterministic path that could be compiled into a flow (issue #18).
