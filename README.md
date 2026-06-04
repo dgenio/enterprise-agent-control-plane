@@ -1,5 +1,10 @@
 # enterprise-agent-control-plane
 
+[![tests](https://github.com/dgenio/enterprise-agent-control-plane/actions/workflows/tests.yml/badge.svg)](https://github.com/dgenio/enterprise-agent-control-plane/actions/workflows/tests.yml)
+[![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![python: >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
+[![status: reference architecture](https://img.shields.io/badge/status-reference%20architecture-6f42c1.svg)](README.md#disclaimer)
+
 Runnable reference architecture for governed enterprise tool-using agents, contrasting an unsafe baseline against a bounded, policy-gated, auditable control-plane path.
 
 ## Problem statement
