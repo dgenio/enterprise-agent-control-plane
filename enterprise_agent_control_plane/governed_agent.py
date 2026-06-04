@@ -7,7 +7,7 @@ from .audit import AuditTrace
 from .catalog import build_catalog, shortlist_capabilities
 from . import fake_tools
 from .flows import ChainWeaverExecutor, FLOW_REGISTRY, select_flow
-from .policies import ACTION_CLASSES, AgentFencePolicy, holds_capability, issue_tokens
+from .policies import ACTION_CLASSES, AgentFencePolicy, PolicyDecision, holds_capability, issue_tokens
 
 # Sentinel so callers can pass ``approver=None`` to mean "no approver" (leave 'ask'
 # pending) while omitting it falls back to the agent's configured approver.
@@ -102,7 +102,15 @@ class GovernedAgent:
             trace.record(principal, "policy.decision", outcome, decision.as_dict())
         return decision
 
-    def _resolve(self, policy_decision, principal, capability, args, approver, trace):
+    def _resolve(
+        self,
+        policy_decision: PolicyDecision,
+        principal: str,
+        capability: str,
+        args: dict[str, Any],
+        approver: Optional[Approver],
+        trace: Optional[AuditTrace],
+    ) -> "tuple[str, str]":
         if policy_decision.decision == "allow":
             return "allowed", policy_decision.reason
         if policy_decision.decision == "deny":
@@ -145,10 +153,17 @@ class GovernedAgent:
             # Unknown/unsupported intent: explicit no-match, no silent default (issue #25).
             trace.record(principal, "flow.select", "no_match",
                          {"intent": intent, "reason": "no governed flow registered for this request"})
+            # Mirror the matched-flow frame's key set so consumers can index a stable
+            # bounded_output schema regardless of whether a flow matched (issue #25).
             frame = {
                 "request": request, "intent": intent, "flow": None,
                 "status": "no_matching_flow",
-                "reason": f"No governed flow matches request {request!r}.",
+                "flow_steps": [],
+                "gated_capability": None,
+                "action_status": "no_matching_flow",
+                "decision_reason": f"No governed flow matches request {request!r}.",
+                "action_class": None,
+                "capability_token_valid": None,
             }
             trace.record(principal, "output.frame", "no_match", frame)
             path = self._save_trace(trace, customer_id, invoice_id)
@@ -186,6 +201,7 @@ class GovernedAgent:
 
         frame = {
             "request": request, "intent": intent, "flow": flow_id,
+            "status": "ok",
             "flow_steps": [r["step"] for r in flow_results],
             "gated_capability": gated_capability,
             "action_status": decision.outcome,

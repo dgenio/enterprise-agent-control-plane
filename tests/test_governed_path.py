@@ -39,6 +39,17 @@ class TestGovernedPath(unittest.TestCase):
         self.assertEqual(outcomes["audit.export_case"], "denied")
         self.assertEqual(outcomes["billing.issue_refund"], "approval_required")
 
+    # --- escalation gates its write instead of executing it -------------------
+    def test_escalation_holds_gated_write_without_approval(self):
+        result = self.agent.run_case("escalate this ticket", "C-100", "INV-9", principal="support_agent")
+        self.assertEqual(result["intent"], "escalation")
+        self.assertEqual(result["flow"], "escalation")
+        # support.create_task is the gated risky action; with no approver it is held for
+        # approval and must NOT have been executed as a flow side effect.
+        self.assertEqual(result["bounded_output"]["gated_capability"], "support.create_task")
+        self.assertEqual(result["bounded_output"]["action_status"], "approval_required")
+        self.assertEqual(fake_tools.TASKS, [])
+
     # --- approval handling for 'ask' (issue #5) -------------------------------
     def test_approver_approve_and_reject(self):
         approved = GovernedAgent(approver=lambda req: True).run_case(

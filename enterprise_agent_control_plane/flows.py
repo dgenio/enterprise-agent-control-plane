@@ -28,9 +28,14 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
         flow_id="customer_reply",
         steps=[FlowStep("lookup_customer", "crm.search_customer"), FlowStep("draft_reply", "email.draft_reply")],
     ),
+    # Escalation does only its read-only prep here (search history). The risky write
+    # (support.create_task) is NOT a flow step: it is gated separately via the policy
+    # decision so it can be held for approval before it ever takes effect — mirroring
+    # how refund_review/customer_reply keep their gated action (issue_refund/send_reply)
+    # out of the executed steps.
     "escalation": FlowDefinition(
         flow_id="escalation",
-        steps=[FlowStep("search_tickets", "support.search_tickets"), FlowStep("create_task", "support.create_task")],
+        steps=[FlowStep("search_tickets", "support.search_tickets")],
     ),
 }
 
