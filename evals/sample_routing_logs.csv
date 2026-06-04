@@ -1,4 +1,7 @@
 case_id,query,candidate,decision,expected,match
-1,refund request,bounded_router_v2,billing.get_invoice,billing.get_invoice,true
-2,send direct email,keyword_router_v1,email.send_reply,email.draft_reply,false
-3,escalate repeated ticket,bounded_router_v2,support.create_task,support.create_task,true
+1,refund request,route_v1,crm.search_customer|billing.get_invoice|billing.issue_refund,crm.search_customer|billing.get_invoice|billing.issue_refund,true
+1,refund request,route_v2,crm.search_customer|billing.get_invoice|billing.issue_refund,crm.search_customer|billing.get_invoice|billing.issue_refund,true
+2,send a direct email reply,route_v1,crm.search_customer|email.send_reply,crm.search_customer|email.draft_reply,false
+2,send a direct email reply,route_v2,crm.search_customer|email.draft_reply,crm.search_customer|email.draft_reply,true
+3,escalate this ticket,route_v1,support.search_tickets|support.create_task,support.search_tickets|support.create_task,true
+3,escalate this ticket,route_v2,support.search_tickets|support.create_task,support.search_tickets|support.create_task,true

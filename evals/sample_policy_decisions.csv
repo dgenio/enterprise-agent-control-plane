@@ -1,0 +1,10 @@
+case_id,principal,capability,amount,expected_decision
+1,support_agent,crm.search_customer,,allow
+2,support_agent,email.send_reply,,ask
+3,support_agent,billing.issue_refund,20,allow
+4,support_agent,billing.issue_refund,149,ask
+5,support_agent,billing.issue_refund,9999,deny
+6,support_agent,audit.export_case,,deny
+7,support_manager,audit.export_case,,allow
+8,support_agent,billing.delete_everything,,deny
+9,billing_admin,billing.issue_refund,20,allow
