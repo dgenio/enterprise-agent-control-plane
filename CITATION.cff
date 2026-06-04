@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this reference architecture, please cite it using this metadata."
+title: "enterprise-agent-control-plane"
+abstract: "Runnable reference architecture for governed enterprise tool-using agents"
+authors:
+  - name: "dgenio"
+version: "0.1.0"
+license: "Apache-2.0"
+repository-code: "https://github.com/dgenio/enterprise-agent-control-plane"
+url: "https://github.com/dgenio/enterprise-agent-control-plane"
