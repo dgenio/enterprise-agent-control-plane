@@ -4,8 +4,8 @@ from typing import Any
 from .audit import AuditTrace
 from .catalog import build_catalog, shortlist_capabilities
 from . import fake_tools
-from .flows import ChainWeaverExecutor
-from .policies import AgentFencePolicy, CapabilityToken, check_capability
+from .flows import ChainWeaverExecutor, FLOW_REGISTRY
+from .policies import AgentFencePolicy, CapabilityToken, check_capability, PolicyDecision
 
 
 class GovernedAgent:
@@ -38,9 +38,15 @@ class GovernedAgent:
 
         token = CapabilityToken(principal=principal, capability="billing.issue_refund")
         can_invoke = check_capability(token, "billing.issue_refund")
-        decision = self.policy.evaluate("billing.issue_refund", principal)
+        if not can_invoke:
+            decision = PolicyDecision("deny", "Capability token invalid.")
+        else:
+            decision = self.policy.evaluate("billing.issue_refund", principal)
         outcome = "blocked" if decision.decision != "allow" else "allowed"
-        trace.record(principal, "policy.check", outcome, {"capability": "billing.issue_refund", "decision": decision.decision})
+        trace.record(principal, "policy.check", outcome, {"capability": "billing.issue_refund", "decision": decision.decision, "token_valid": can_invoke})
+
+        flow_caps = {step.capability for step in FLOW_REGISTRY["refund_review"].steps}
+        visible_tools = sorted({c.capability for c in shortlist} | flow_caps)
 
         bounded_frame = {
             "customer_id": customer_id,
@@ -51,11 +57,12 @@ class GovernedAgent:
             "capability_token_valid": can_invoke,
         }
 
-        trace_path = Path("traces/governed_run.json")
+        trace_filename = f"governed_run_{customer_id}_{invoice_id}.json"
+        trace_path = Path("traces") / trace_filename
         trace.save(trace_path)
         return {
             "mode": "governed",
-            "visible_tools": [c.capability for c in shortlist],
+            "visible_tools": visible_tools,
             "bounded_output": bounded_frame,
             "audit_trace_path": str(trace_path),
         }
