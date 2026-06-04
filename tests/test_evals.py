@@ -1,5 +1,8 @@
 import csv
+import io
 import unittest
+from contextlib import redirect_stdout
+from unittest import mock
 
 from enterprise_agent_control_plane import evals
 from enterprise_agent_control_plane.policies import AgentFencePolicy
@@ -52,12 +55,26 @@ class TestPolicyEval(unittest.TestCase):
 
 class TestGate(unittest.TestCase):
     def test_gate_passes_on_committed_state(self):
-        self.assertEqual(evals.main([]), 0)
+        # main() is the CLI entry point and prints by design; redirect its output so the
+        # exit-code assertion does not spam the test run.
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(evals.main([]), 0)
 
     def test_gate_passes_helper(self):
-        passed, failures = evals.run_gate()
+        passed, failures = evals.run_gate(verbose=False)
         self.assertTrue(passed)
         self.assertEqual(failures, [])
+
+    def test_gate_fails_and_exits_nonzero_on_regression(self):
+        # The gate's reason to exist (issue #67) is failing CI on a regression. Raise a
+        # floor above the reference router's achievable score to force one, then assert
+        # the helper reports it and the CLI exits non-zero.
+        with mock.patch.dict(evals.ROUTER_ACCURACY_FLOOR, {"route_v2": 1.01}):
+            passed, failures = evals.run_gate(verbose=False)
+            self.assertFalse(passed)
+            self.assertTrue(any("route_v2" in message for message in failures))
+            with redirect_stdout(io.StringIO()):
+                self.assertEqual(evals.main([]), 1)
 
 
 if __name__ == "__main__":

@@ -255,12 +255,19 @@ def _print_policy_report(report: PolicyEvalReport) -> None:
         )
 
 
-def run_gate() -> tuple[bool, list[str]]:
-    """Run both lanes and return ``(passed, failure_messages)`` (issue #67)."""
+def run_gate(verbose: bool = True) -> tuple[bool, list[str]]:
+    """Run both lanes and return ``(passed, failure_messages)`` (issue #67).
+
+    Set ``verbose=False`` to suppress the human-readable router/policy tables. The
+    pass/fail result and failure messages are returned either way, so callers that use
+    the gate programmatically (e.g. the test suite) can stay quiet while the CLI keeps
+    its full output.
+    """
     failures: list[str] = []
 
     router_results = evaluate_routers()
-    _print_router_table(router_results)
+    if verbose:
+        _print_router_table(router_results)
     for r in router_results:
         floor = ROUTER_ACCURACY_FLOOR.get(r.candidate)
         if floor is not None and r.score + 1e-9 < floor:
@@ -269,7 +276,8 @@ def run_gate() -> tuple[bool, list[str]]:
             )
 
     report = evaluate_policy()
-    _print_policy_report(report)
+    if verbose:
+        _print_policy_report(report)
     for case in report.mismatches:
         kind = "unsafe drift" if case.unsafe_drift else "policy mismatch"
         amount = "" if case.amount is None else f" amount={case.amount}"
