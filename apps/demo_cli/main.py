@@ -62,12 +62,41 @@ def main() -> None:
 
     print("\n[2] Governed control plane")
     fake_tools.reset_state()
-    governed = GovernedAgent().run_case(customer_id, invoice_id)
+    agent = GovernedAgent()
+    governed = agent.run_case("refund request", customer_id, invoice_id, principal="support_agent")
+    print(f"Principal: support_agent | intent: {governed['intent']} -> flow: {governed['flow']}")
     print(f"Shortlisted tools: {len(governed['visible_tools'])} -> {governed['visible_tools']}")
     print(f"Deterministic flow steps: {governed['bounded_output']['flow_steps']}")
-    print(f"Risky action status: {governed['bounded_output']['refund_action']}")
+    print(
+        f"Gated action {governed['bounded_output']['gated_capability']} "
+        f"({governed['bounded_output']['action_class']}) -> {governed['bounded_output']['action_status']}"
+    )
+    print(f"  reason: {governed['bounded_output']['decision_reason']}")
     print(f"Bounded output frame: {governed['bounded_output']}")
     print(f"Audit trace emitted: {governed['audit_trace_path']}")
+
+    export = agent.export_case(governed["trace"], principal="support_manager")
+    print(f"Explainable case bundle exported: {export['bundle_path']} (decision: {export['decision']['outcome']})")
+
+    print("\n[2b] One scenario, three policy outcomes (allow / deny / approval-required)")
+    fake_tools.reset_state()
+    scenario = agent.run_decision_scenario(principal="support_agent")
+    for d in scenario["decisions"]:
+        print(f"  {d['capability']} ({d['action_class']}): decision={d['decision']} -> outcome={d['outcome']}")
+        print(f"    reason: {d['reason']}")
+
+    print("\n[2c] Approval handling for 'ask' decisions (injectable approver)")
+    fake_tools.reset_state()
+    approved = GovernedAgent(approver=lambda req: True).run_case(
+        "refund request", customer_id, invoice_id, principal="support_agent"
+    )
+    fake_tools.reset_state()
+    rejected = GovernedAgent(approver=lambda req: False).run_case(
+        "refund request", customer_id, invoice_id, principal="support_agent"
+    )
+    print(f"  approver approves -> {approved['bounded_output']['action_status']}")
+    print(f"  approver rejects  -> {rejected['bounded_output']['action_status']}")
+    print(f"  no approver       -> {governed['bounded_output']['action_status']}")
 
 
 if __name__ == "__main__":
