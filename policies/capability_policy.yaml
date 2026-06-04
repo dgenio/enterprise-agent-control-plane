@@ -1,0 +1,12 @@
+principals:
+  agent:
+    allow:
+      - crm.search_customer
+      - billing.get_invoice
+      - support.search_tickets
+      - support.create_task
+      - email.draft_reply
+      - docs.search_policy
+  supervisor:
+    allow:
+      - audit.export_case

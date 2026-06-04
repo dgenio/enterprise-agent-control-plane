@@ -1,0 +1,4 @@
+{
+  "mode": "unsafe",
+  "note": "Raw outputs and full tool visibility with no policy or audit boundary."
+}

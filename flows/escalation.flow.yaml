@@ -1,0 +1,6 @@
+flow_id: escalation
+steps:
+  - name: search_tickets
+    capability: support.search_tickets
+  - name: create_task
+    capability: support.create_task

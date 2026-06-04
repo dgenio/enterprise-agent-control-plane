@@ -1,0 +1,10 @@
+flow_id: refund_review
+steps:
+  - name: lookup_customer
+    capability: crm.search_customer
+  - name: lookup_invoice
+    capability: billing.get_invoice
+  - name: check_policy
+    capability: docs.search_policy
+  - name: draft_reply
+    capability: email.draft_reply

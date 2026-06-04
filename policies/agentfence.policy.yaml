@@ -1,0 +1,7 @@
+rules:
+  - capability: billing.issue_refund
+    decision: ask
+  - capability: email.send_reply
+    decision: ask
+  - capability: audit.export_case
+    decision: deny_unless_supervisor
