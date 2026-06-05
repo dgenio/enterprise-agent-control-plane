@@ -257,8 +257,51 @@ def main() -> None:
     print(f"  approver rejects  -> {rejected['bounded_output']['action_status']}")
     print(f"  no approver       -> {governed['bounded_output']['action_status']}")
 
+    print_execution_contract(customer_id, invoice_id)
+
     print_contrast(baseline, governed)
     print_eval_lane()
+
+
+def print_execution_contract(customer_id: str, invoice_id: str) -> None:
+    """Governed write-path execution contract (#38, #41, #64, #66, #113)."""
+    print("\n[2d] Governed write-path execution contract")
+
+    # #66 — a two-write flow gates each write independently.
+    fake_tools.reset_state()
+    two_write = GovernedAgent().run_case("refund and notify the customer", customer_id, invoice_id)
+    print("  gate every write a flow touches (#66):")
+    for action in two_write["bounded_output"]["gated_actions"]:
+        print(f"    {action['capability']} -> {action['action_status']} (commit: {action['commit_mode']})")
+
+    # #41 — a not-found dependency halts the flow before any write.
+    fake_tools.reset_state()
+    halted = GovernedAgent().run_case("refund request", "C-100", "INV-404")
+    print(
+        f"  fail-closed steps (#41): INV-404 -> status={halted['bounded_output']['status']}, "
+        f"refunds recorded={len(fake_tools.REFUNDS)} (no write ran)"
+    )
+
+    # #38 + #113 — commit only on allow, and at most once per case.
+    fake_tools.reset_state()
+    agent = GovernedAgent(approver=lambda req: True)
+    first = agent.run_case("refund request", customer_id, invoice_id)
+    second = agent.run_case("refund request", customer_id, invoice_id)
+    print(
+        f"  commit boundary + idempotency (#38/#113): run1={first['bounded_output']['gated_actions'][0]['commit_mode']}, "
+        f"run2={second['bounded_output']['gated_actions'][0]['commit_mode']}, "
+        f"refunds recorded={len(fake_tools.REFUNDS)}"
+    )
+
+    # #64 — self-approval is rejected even with an approver that would say yes.
+    fake_tools.reset_state()
+    self_approved = GovernedAgent(approver=lambda req: True, approver_principal="support_agent").run_case(
+        "refund request", customer_id, invoice_id, principal="support_agent"
+    )
+    print(
+        f"  separation of duties (#64): support_agent self-approval -> "
+        f"{self_approved['bounded_output']['action_status']}"
+    )
 
 
 def print_eval_lane() -> None:
