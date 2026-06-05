@@ -42,6 +42,10 @@ documentation; start here, then follow the links below.
 
 - [Roadmap](roadmap.md) — what is planned next.
 - [The lesson-capture gap](lesson-capture-gap.md) — a worked baseline "before".
+- [Baseline model-stand-in fidelity](baseline-model-fidelity.md) — why the "before"
+  gaps are architectural, not artifacts of the deterministic offline stand-in.
+- [Baseline incident post-mortem](baseline-incident-postmortem.md) — the baseline gaps
+  combined into one realistic, un-investigable incident.
 - [Listing snippets](listing-snippets.md) — ready-to-copy descriptions for
   external listings.
 

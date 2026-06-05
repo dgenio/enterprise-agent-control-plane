@@ -21,8 +21,12 @@ Several variants exist on purpose:
   an undifferentiated nine-tool catalog (issue #30).
 * ``route_injection_naive`` -- a router with no trust boundary that lets an injected
   directive in fetched tool data steer a write (issue #31).
+* ``route_injection_exfil`` -- the same missing trust boundary, but the injected directive
+  redirects an *outbound email* to an attacker-style address, exfiltrating in-context
+  data with no egress boundary (issue #103).
 """
 
+import re
 from typing import Any, Mapping, Protocol, Sequence
 
 
@@ -115,6 +119,51 @@ def _looks_like_refund_directive(context: "Mapping[str, Any]") -> bool:
     """
     blob = repr(context).lower()
     return "issue a full refund" in blob or "issue a refund" in blob
+
+
+# An injected directive of the form "...forward...to <address>..." planted in fetched tool
+# data. Matching it here is deliberately naive: it treats untrusted tool/customer text as if
+# it could carry an egress instruction, which is exactly the missing boundary issue #103
+# demonstrates. It only ever matches the obviously-``[FAKE]`` planted directive.
+_EXFIL_RE = re.compile(r"forward[^@]*?to\s+([\w.+-]+@[\w.-]+)", re.IGNORECASE)
+
+
+def injected_exfil_target(context: "Mapping[str, Any] | None") -> "str | None":
+    """Return an external recipient address an injected directive asks to forward data to.
+
+    Scans the accumulated tool output for a planted ``[FAKE]`` "forward ... to <email>"
+    directive and returns the address it names, or ``None``. Used by the exfiltration
+    router to pick the send and by the baseline agent to address it -- both reading the
+    destination from untrusted data because there is no egress boundary (issue #103).
+    """
+    if not context:
+        return None
+    match = _EXFIL_RE.search(repr(context))
+    return match.group(1) if match else None
+
+
+def route_injection_exfil(
+    request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None
+) -> "str | None":
+    """Baseline router with no egress boundary on an outbound send (issue #103).
+
+    For a benign read request, it looks up the customer and their tickets -- then, because
+    tool output and operator intent share one undifferentiated context, an injected
+    ``[FAKE]`` directive in the fetched ticket data redirects an ``email.send_reply`` to an
+    external/attacker-style address the request never named. Because raw outputs were
+    forwarded verbatim (issue #16), the in-context sensitive fields are available to be
+    carried out in the body. A policy/egress gate (issue #103) would stand before the send.
+    """
+    done = set(called)
+
+    if "crm.search_customer" not in done:
+        return "crm.search_customer"
+    if "support.search_tickets" not in done:
+        return "support.search_tickets"
+    # No egress boundary: act on an injected forward-to directive found in fetched tool data.
+    if injected_exfil_target(context) and "email.send_reply" not in done:
+        return "email.send_reply"
+    return None
 
 
 def route_injection_naive(
