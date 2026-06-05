@@ -3,7 +3,7 @@ from typing import Any
 
 from .baseline_router import Router, injected_exfil_target, route_v1
 from .catalog import build_tool_definitions, context_size, serialize_tool_catalog
-from . import fake_tools
+from .registry import build_tool_map
 
 # Action classes the baseline does NOT distinguish: these move money / send external
 # email / create work, yet the baseline reaches them with no principal, token, or
@@ -59,17 +59,9 @@ class BaselineAgent:
     def __init__(self, router: Router = route_v1):
         self.router = router
         self.tool_definitions = build_tool_definitions()
-        self.tools = {
-            "crm.search_customer": fake_tools.crm_search_customer,
-            "billing.get_invoice": fake_tools.billing_get_invoice,
-            "billing.issue_refund": fake_tools.billing_issue_refund,
-            "support.search_tickets": fake_tools.support_search_tickets,
-            "support.create_task": fake_tools.support_create_task,
-            "email.draft_reply": fake_tools.email_draft_reply,
-            "email.send_reply": fake_tools.email_send_reply,
-            "docs.search_policy": fake_tools.docs_search_policy,
-            "audit.export_case": fake_tools.audit_export_case,
-        }
+        # The same registry-derived tool map the governed agent uses (issue #65); the baseline
+        # differs in how it *governs* these tools, not in which tools exist.
+        self.tools = build_tool_map()
 
     def run_case(self, request: str, customer_id: str, invoice_id: str) -> dict[str, Any]:
         # The whole catalog is serialized into context once and re-offered every step.

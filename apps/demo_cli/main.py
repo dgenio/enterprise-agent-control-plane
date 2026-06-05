@@ -302,8 +302,20 @@ def main() -> None:
     agent = GovernedAgent()
     governed = agent.run_case("refund request", customer_id, invoice_id, principal="support_agent")
     print(f"Principal: support_agent | intent: {governed['intent']} -> flow: {governed['flow']}")
-    print(f"Shortlisted tools: {len(governed['visible_tools'])} -> {governed['visible_tools']}")
+    metric = governed["context_metric"]
+    print(
+        f"Context firewall (#24): model-visible shortlist = {metric['shortlist_chars']} chars "
+        f"vs full catalog {metric['full_catalog_chars']} chars ({metric['reduction_pct']}% smaller)"
+    )
+    print(f"Enforced capability budget (#110): {len(governed['visible_tools'])} -> {governed['visible_tools']}")
     print(f"Deterministic flow steps: {governed['bounded_output']['flow_steps']}")
+    if governed["frames"]:
+        first = governed["frames"][0]
+        print(f"Bounded Frame (#22/#37) for {first['capability']}: {first['summary']}")
+        print(
+            f"  handle={first['handle']} untrusted={first['untrusted']} "
+            f"redacted={first['redacted_fields']} (raw detail kept out of model context)"
+        )
     print(
         f"Gated action {governed['bounded_output']['gated_capability']} "
         f"({governed['bounded_output']['action_class']}) -> {governed['bounded_output']['action_status']}"
@@ -314,6 +326,8 @@ def main() -> None:
 
     export = agent.export_case(governed["trace"], principal="support_manager")
     print(f"Explainable case bundle exported: {export['bundle_path']} (decision: {export['decision']['outcome']})")
+
+    print_frame_expansion(agent, governed)
 
     print("\n[2b] One scenario, three policy outcomes (allow / deny / approval-required)")
     fake_tools.reset_state()
@@ -379,6 +393,26 @@ def print_execution_contract(customer_id: str, invoice_id: str) -> None:
     print(
         f"  separation of duties (#64): support_agent self-approval -> "
         f"{self_approved['bounded_output']['action_status']}"
+    )
+
+
+def print_frame_expansion(agent: GovernedAgent, governed: dict[str, Any]) -> None:
+    """Gated, audited access to a Frame's redacted raw detail (#114)."""
+    print("\n[2e] Gated Frame expansion (controlled access to redacted detail)")
+    invoice_frame = next(
+        (f for f in governed["frames"] if f["capability"] == "billing.get_invoice"), None
+    )
+    if invoice_frame is None:
+        print("  (no invoice frame in this case)")
+        return
+    handle = invoice_frame["handle"]
+    print(f"  frame {handle} redacts: {invoice_frame['redacted_fields']}")
+    denied = agent.expand_frame(handle, "support_agent", trace=governed["trace"])
+    print(f"  support_agent expand -> {denied['outcome']}: summary only, raw detail withheld")
+    allowed = agent.expand_frame(handle, "support_manager", trace=governed["trace"])
+    print(
+        f"  support_manager expand -> {allowed['outcome']}: revealed {allowed['revealed_fields']} "
+        "(who/what/when recorded in the audit trace)"
     )
 
 

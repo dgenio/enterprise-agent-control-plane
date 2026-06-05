@@ -2,31 +2,29 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any, Iterable, Literal, Optional
+from typing import Any, Iterable, Literal, Optional, cast
+
+from .registry import CAPABILITY_REGISTRY
 
 Decision = Literal["allow", "deny", "ask"]
 ActionClass = Literal["read", "write", "destructive"]
 
 
 # --- Action classes (issue #2) ------------------------------------------------
-# Every governed capability is classified by the kind of side effect it can have.
-# Anything not listed here is unknown and denied by default (deny-by-default).
+# Every governed capability is classified by the kind of side effect it can have. Derived from
+# the single capability registry (issue #65) so the classification can never drift from the
+# catalog or tool bindings. Anything not in the registry is unknown and denied by default
+# (deny-by-default) -- see ``AgentFencePolicy.evaluate``.
 ACTION_CLASSES: dict[str, ActionClass] = {
-    "crm.search_customer": "read",
-    "billing.get_invoice": "read",
-    "support.search_tickets": "read",
-    "docs.search_policy": "read",
-    "email.draft_reply": "read",   # composes text only; no external side effect
-    "audit.export_case": "read",   # read/export only, but principal-restricted below
-    "support.create_task": "write",
-    "email.send_reply": "write",
-    "billing.issue_refund": "destructive",
+    cap: cast(ActionClass, spec.action_class) for cap, spec in CAPABILITY_REGISTRY.items()
 }
 
 # Capabilities only specific principals may ever invoke, regardless of action class.
-# audit.export_case exposes case evidence, so it is restricted to managers.
+# audit.export_case exposes case evidence; frame.expand reveals a Frame's redacted raw detail
+# (issue #114) -- both are restricted to principals authorized to see sensitive material.
 PRINCIPAL_RESTRICTED: dict[str, set[str]] = {
     "audit.export_case": {"support_manager", "supervisor"},
+    "frame.expand": {"support_manager", "supervisor", "billing_admin"},
 }
 
 # Parameter-aware thresholds for destructive money movement (issue #36). An amount at
@@ -194,11 +192,14 @@ ROLE_GRANTS: dict[str, set[str]] = {
         "support.create_task",
         "billing.issue_refund",
         "audit.export_case",
+        # May reveal a Frame's redacted raw detail (issue #114); support_agent may not.
+        "frame.expand",
     },
     "billing_admin": {
         "crm.search_customer",
         "billing.get_invoice",
         "billing.issue_refund",
+        "frame.expand",
     },
 }
 

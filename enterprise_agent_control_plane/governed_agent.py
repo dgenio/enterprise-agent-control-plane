@@ -5,7 +5,8 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from .audit import AuditTrace
-from .catalog import build_catalog, shortlist_capabilities
+from .catalog import build_catalog, build_tool_definitions, context_reduction, shortlist_capabilities
+from .frames import Frame, FrameStore, field_names
 from . import fake_tools
 from .flows import ChainWeaverExecutor, FLOW_REGISTRY, select_flow
 from .policies import (
@@ -16,6 +17,7 @@ from .policies import (
     issue_tokens,
     may_approve,
 )
+from .registry import build_tool_map, risk_of, sensitive_fields
 
 # Sentinel so callers can pass ``approver=None`` to mean "no approver" (leave 'ask'
 # pending) while omitting it falls back to the agent's configured approver.
@@ -68,18 +70,13 @@ class GovernedAgent:
         # Case-scoped idempotency ledger: ``(trace_id, capability)`` keys for writes already
         # committed by this agent, so replaying the same case does not double-execute (#113).
         self._committed: set[tuple[str, str]] = set()
-        self.tools = {
-            "crm.search_customer": fake_tools.crm_search_customer,
-            "billing.get_invoice": fake_tools.billing_get_invoice,
-            "billing.issue_refund": fake_tools.billing_issue_refund,
-            "support.search_tickets": fake_tools.support_search_tickets,
-            "support.create_task": fake_tools.support_create_task,
-            "email.draft_reply": fake_tools.email_draft_reply,
-            "email.send_reply": fake_tools.email_send_reply,
-            "docs.search_policy": fake_tools.docs_search_policy,
-            "audit.export_case": fake_tools.audit_export_case,
-        }
+        # Capability -> callable, derived from the single registry so the agent's tool map
+        # cannot drift from the catalog / action classes (issue #65).
+        self.tools = build_tool_map()
         self.executor = ChainWeaverExecutor(self.tools)
+        # The bounded Frames from the most recent run, addressable by handle for a later gated
+        # expansion (issue #114). Replaced per ``run_case``; starts empty.
+        self.frame_store = FrameStore()
 
     def decide(
         self,
@@ -214,11 +211,20 @@ class GovernedAgent:
         principal: str = "support_agent",
         approver: Any = _USE_DEFAULT,
         approver_principal: Any = _USE_DEFAULT,
+        capability_budget: Optional["set[str] | frozenset[str]"] = None,
     ) -> dict[str, Any]:
+        """Run one governed case end to end.
+
+        ``capability_budget`` (issue #110) overrides the case's computed capability budget.
+        It exists so a caller/test can prove enforcement: a flow step outside the supplied
+        budget fails closed before any write. When ``None`` the budget is derived from the
+        bounded shortlist plus the selected flow's capabilities.
+        """
         approver = self.approver if approver is _USE_DEFAULT else approver
         approver_principal = (
             self.approver_principal if approver_principal is _USE_DEFAULT else approver_principal
         )
+        self.frame_store = FrameStore()
         trace = AuditTrace(trace_id=f"trace-{customer_id}-{invoice_id}")
 
         intent, flow_id = select_flow(request)
@@ -247,14 +253,33 @@ class GovernedAgent:
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": None,
                 "visible_tools": [], "decision": None, "decisions": [], "bounded_output": frame,
+                "frames": [], "context_metric": None,
                 "audit_trace_path": str(path), "trace": trace,
             }
 
-        # Bounded shortlist; the why is recorded so the trace is explainable (issue #27).
+        # Bounded shortlist; the why is recorded so the trace is explainable (issue #27). The
+        # context-size reduction vs the baseline's full catalog is measured here (issue #24).
         shortlist = shortlist_capabilities(request, self.catalog)
+        context_metric = context_reduction(shortlist, build_tool_definitions())
+
+        # The case capability budget (issue #110): the bounded shortlist made authoritative.
+        # It is the union of the model-visible shortlist and the selected flow's step + gated
+        # capabilities, computed BEFORE execution and enforced by the executor -- not a post-hoc
+        # union reported after running against the full tool map. ``visible_tools`` is this
+        # enforced budget. A caller may override it to prove fail-closed behavior.
+        flow = FLOW_REGISTRY[flow_id]
+        flow_caps = {step.capability for step in flow.steps}
+        if capability_budget is None:
+            budget = {c.capability for c in shortlist} | flow_caps | set(flow.gated_capabilities)
+        else:
+            budget = set(capability_budget)
+        visible_tools = sorted(budget)
+
         trace.record(principal, "shortlist", "ok", {
             "capabilities": [c.capability for c in shortlist],
             "reason": f"keyword shortlist for intent {intent!r}; full catalog kept out of model context",
+            "budget": sorted(budget),
+            "context_metric": context_metric,
         })
 
         trace.record(principal, "flow.select", "ok",
@@ -281,18 +306,31 @@ class GovernedAgent:
             payload,
             token_check=lambda cap: holds_capability(tokens, cap),
             on_step=_on_step,
+            budget=budget,
         )
         executed = [r for r in flow_results if r["status"] == "ok"]
         trace.record(principal, "flow.execute", "ok",
                      {"flow_id": flow_id, "steps": len(executed), "blocked": len(flow_results) - len(executed)})
 
-        flow_caps = {step.capability for step in FLOW_REGISTRY[flow_id].steps}
-        visible_tools = sorted({c.capability for c in shortlist} | flow_caps)
+        # Wrap each executed step's raw output in a bounded Frame (issues #22/#37): the raw
+        # payload is stashed behind an opaque handle in the frame store, sensitive fields are
+        # redacted, and the model-visible record is the value-free summary marked untrusted.
+        # The raw ``flow_results`` stay available to the control plane below (e.g. to read the
+        # invoice amount for the gate) -- the firewall is on what the MODEL sees, not the agent.
+        frames = self._wrap_frames(executed, trace, principal)
 
-        # Fail closed (issue #41): if any step failed, the flow halted -- no gated write runs.
+        # Fail closed (issue #41/#110): if any step failed, the flow halted -- no gated write
+        # runs. An out-of-budget step (#110) is the same fail-closed path with a budget reason.
         failed_step = next((r for r in flow_results if r["status"] == "failed"), None)
         if failed_step is not None:
-            reason = f"step {failed_step['step']!r} ({failed_step['capability']}) failed; flow halted before any write."
+            out = failed_step.get("output")
+            if isinstance(out, dict) and out.get("error") == "out_of_budget":
+                reason = (
+                    f"step {failed_step['step']!r} ({failed_step['capability']}) is outside the "
+                    f"case capability budget {sorted(budget)}; flow halted before any write (issue #110)."
+                )
+            else:
+                reason = f"step {failed_step['step']!r} ({failed_step['capability']}) failed; flow halted before any write."
             trace.record(principal, "flow.halt", "halted",
                          {"step": failed_step["step"], "capability": failed_step["capability"], "reason": reason})
             frame = {
@@ -311,7 +349,9 @@ class GovernedAgent:
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
                 "visible_tools": visible_tools, "decision": None, "decisions": [],
-                "bounded_output": frame, "audit_trace_path": str(path), "trace": trace,
+                "bounded_output": frame, "frames": [f.as_dict() for f in frames],
+                "context_metric": context_metric,
+                "audit_trace_path": str(path), "trace": trace,
             }
 
         # Gate EVERY write/destructive capability the flow performs, not one hardcoded action
@@ -358,7 +398,9 @@ class GovernedAgent:
             "visible_tools": visible_tools,
             "decision": decisions[0].as_dict() if decisions else None,
             "decisions": [d.as_dict() for d in decisions],
-            "bounded_output": frame, "audit_trace_path": str(path), "trace": trace,
+            "bounded_output": frame, "frames": [f.as_dict() for f in frames],
+            "context_metric": context_metric,
+            "audit_trace_path": str(path), "trace": trace,
         }
 
     @staticmethod
@@ -479,6 +521,82 @@ class GovernedAgent:
         path = Path("traces") / f"case_{trace.trace_id}.json"
         path.write_text(json.dumps(bundle, indent=2), encoding="utf-8")
         return {"bundle_path": str(path), "bundle": bundle, "decision": decision.as_dict()}
+
+    def _wrap_frames(
+        self,
+        executed: list[dict[str, Any]],
+        trace: AuditTrace,
+        principal: str,
+    ) -> list[Frame]:
+        """Wrap each executed step's raw output in a bounded, untrusted Frame (issues #22/#37).
+
+        The raw payload is stashed behind an opaque handle in ``self.frame_store``; the trace
+        and the returned result carry only the value-free Frame (summary + handle + redacted
+        field names), so sensitive raw detail never reaches model-visible context.
+        """
+        frames: list[Frame] = []
+        for record in executed:
+            capability = record["capability"]
+            frame = self.frame_store.wrap(
+                capability,
+                record["output"],
+                risk=risk_of(capability),
+                sensitive_fields=sensitive_fields(capability),
+            )
+            frames.append(frame)
+            trace.record(principal, "flow.frame", "ok", {
+                "capability": capability,
+                "handle": frame.handle,
+                "redacted_fields": frame.redacted_fields,
+                "summary": frame.summary,
+                "risk": frame.risk,
+                "untrusted": frame.untrusted,
+            })
+        return frames
+
+    def expand_frame(
+        self,
+        handle: str,
+        principal: str,
+        trace: Optional[AuditTrace] = None,
+    ) -> dict[str, Any]:
+        """Reveal a Frame's redacted raw detail as a gated, audited capability (issue #114).
+
+        Expansion routes through :meth:`decide` (``frame.expand``): a principal not authorized
+        to view raw detail is rejected at the token/policy layer and gets the bounded summary
+        only (``revealed=None``). An authorized reveal returns the raw payload and records a
+        ``frame.expand`` audit event naming the handle, the revealed fields, and the principal,
+        so the trace can always answer who accessed sensitive raw data, when, and why.
+        """
+        decision = self.decide("frame.expand", principal, {"handle": handle}, trace=trace)
+        if decision.outcome not in _COMMITTABLE_OUTCOMES:
+            if trace is not None:
+                trace.record(principal, "frame.expand", "denied", {
+                    "handle": handle, "outcome": decision.outcome,
+                    "revealed_fields": [], "reason": decision.reason,
+                })
+            return {"handle": handle, "outcome": decision.outcome, "revealed": None,
+                    "revealed_fields": [], "decision": decision.as_dict()}
+
+        if not self.frame_store.has(handle):
+            if trace is not None:
+                trace.record(principal, "frame.expand", "not_found", {
+                    "handle": handle, "outcome": decision.outcome,
+                    "revealed_fields": [], "reason": "no such frame handle in the current case",
+                })
+            return {"handle": handle, "outcome": decision.outcome, "revealed": None,
+                    "revealed_fields": [], "decision": decision.as_dict()}
+
+        raw = self.frame_store.expand(handle)
+        revealed_fields = sorted(field_names(raw))
+        if trace is not None:
+            trace.record(principal, "frame.expand", "revealed", {
+                "handle": handle, "outcome": decision.outcome,
+                "revealed_fields": revealed_fields,
+                "reason": f"{principal} authorized to reveal raw detail behind {handle}.",
+            })
+        return {"handle": handle, "outcome": decision.outcome, "revealed": raw,
+                "revealed_fields": revealed_fields, "decision": decision.as_dict()}
 
     def _save_trace(self, trace: AuditTrace, customer_id: str, invoice_id: str) -> Path:
         path = Path("traces") / f"governed_run_{customer_id}_{invoice_id}.json"
