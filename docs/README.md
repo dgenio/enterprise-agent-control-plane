@@ -23,6 +23,8 @@ documentation; start here, then follow the links below.
   shortlist → flow → policy → audit.
 - [Governance model](governance-model.md) — action classes, allow/deny/ask
   decisions, capability tokens, and audit.
+- [Audit trace](audit-trace.md) — the event schema, per-step events, decision
+  provenance, and the tamper-evident (hash-chained) reference pattern.
 - [Threat model](threat-model.md) — the baseline risks each control addresses.
 - [Evaluation methodology](evaluation-methodology.md) — offline scoring of
   candidate routers and policies.
