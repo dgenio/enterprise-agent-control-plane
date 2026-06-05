@@ -1,10 +1,13 @@
-.PHONY: setup demo test eval
+.PHONY: setup demo baseline test eval
 
 setup:
 	python -m pip install -e .
 
 demo:
 	python -m apps.demo_cli.main
+
+baseline:
+	python -m apps.baseline_cli.main
 
 test:
 	python -m unittest discover -s tests -p "test_*.py" -v
