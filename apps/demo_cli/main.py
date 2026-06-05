@@ -4,10 +4,12 @@ from enterprise_agent_control_plane import fake_tools
 from enterprise_agent_control_plane.baseline_agent import BaselineAgent
 from enterprise_agent_control_plane.baseline_router import (
     route_greedy,
+    route_injection_exfil,
     route_injection_naive,
     route_v1,
     route_v2,
 )
+from enterprise_agent_control_plane.baseline_runner import aggregate_session_side_effects
 from enterprise_agent_control_plane.governed_agent import GovernedAgent
 from enterprise_agent_control_plane.scenarios import WORKLOAD
 
@@ -61,6 +63,10 @@ def print_refund_anatomy(baseline: dict[str, Any]) -> None:
     for step in baseline["steps"]:
         print(f"  step {step['step']}: picked {step['capability']} (chose from {step['tools_offered']} tools)")
     print(f"RISK deterministic path run as model steps: {baseline['compilation_note']}")
+    print(
+        f"RISK per-step model round-trips: {baseline['model_decisions']} router decisions on a "
+        f"fixed path (a compiled flow needs ~1) -- {baseline['model_decision_note']}"
+    )
 
     print("RISK raw-output leakage (fields forwarded but not needed for the task):")
     for capability, extra in baseline["leaked_fields"].items():
@@ -179,6 +185,74 @@ def print_lost_correction(customer_id: str, invoice_id: str) -> None:
     )
 
 
+def print_silent_failure(customer_id: str, invoice_id: str) -> None:
+    """Read failure silently absorbed on a non-destructive path (#73)."""
+    print("\n[1g] Silent absorption of a read failure (no execution contract)")
+    fake_tools.reset_state()
+    # An unknown customer on the email path: the lookup fails, but the agent drafts/sends
+    # against placeholder data and the run reports no failure.
+    result = BaselineAgent(router=route_v1).run_case("send a direct email reply", "C-404", invoice_id)
+    customer = result["raw_outputs"].get("crm.search_customer")
+    print(f"  unknown customer 'C-404' -> crm.search_customer returned: {customer}")
+    print(f"  steps still run: {[s['capability'] for s in result['steps']]}")
+    for gap in result["silent_failures"]:
+        print(f"    RISK {gap}")
+    print(
+        f"  run-level failure_signal = {result['failure_signal']}: the degraded run looks "
+        "successful. An execution contract (agent-kernel) + structured trace would surface it."
+    )
+
+
+def print_exfiltration(customer_id: str, invoice_id: str) -> None:
+    """Sensitive-data exfiltration via the ungated email send (#103)."""
+    print("\n[1h] Sensitive-data exfiltration via ungated email send (no egress boundary)")
+    fake_tools.reset_state()
+    request = "review this customer's latest ticket"
+    result = BaselineAgent(router=route_injection_exfil).run_case(request, customer_id, invoice_id)
+    sent = fake_tools.SENT_EMAILS[-1] if fake_tools.SENT_EMAILS else {}
+    print(f"  request: {request!r} (a benign read; no external send authorized)")
+    print(f"  route picked: {[s['capability'] for s in result['steps']]}")
+    print(f"  email.send_reply -> to={sent.get('to')!r} (external address taken from injected [FAKE] data)")
+    if "payment_method" in sent.get("body", ""):
+        print("  RISK no egress boundary: untrusted in-context data chose BOTH the destination AND the payload;")
+        print("    sensitive fields were available only because raw outputs were forwarded verbatim (#16),")
+        print("    and no policy decision stood before the send (#17). An AgentFence egress gate is the contrast.")
+
+
+def print_log_leakage(baseline: dict[str, Any]) -> None:
+    """Sensitive fields persisted verbatim in the durable log surface (#106)."""
+    print("\n[1i] Sensitive fields leaking into the durable log surface (no redaction)")
+    debug_lines = [line for line in baseline["logs"] if "[debug]" in line]
+    present = sorted(
+        field for field in ("payment_method", "internal_notes", "risk_flags")
+        if any(field in line for line in debug_lines)
+    )
+    print(f"  {len(debug_lines)} raw-payload [debug] log line(s) carry sensitive-looking fields: {present}")
+    print(
+        "  RISK these persist into traces/unsafe_run.json verbatim -- a second exposure beyond "
+        "model context (#16) that outlives the run and could ship to log aggregation. A bounded "
+        "Frame would project only task-relevant fields into both context and logs."
+    )
+
+
+def print_no_aggregate_budget() -> None:
+    """No run/session-level ceiling on side-effecting actions (#109)."""
+    print("\n[1j] No aggregate ceiling/throttle on side-effecting actions")
+    agg = aggregate_session_side_effects()
+    print(
+        f"  over the {agg['cases']}-case workload: refunds={agg['refunds']} "
+        f"(value={agg['total_refund_value']}), emails={agg['emails_sent']}, tasks={agg['tasks_created']}"
+    )
+    print(
+        f"  total side-effecting actions = {agg['total_side_effecting_actions']}; "
+        f"aggregate_ceiling = {agg['aggregate_ceiling']}"
+    )
+    print(
+        "  RISK nothing caps the count of writes or total money moved across a session; an "
+        "AgentFence budget / agent-kernel usage-scoped token would supply the ceiling."
+    )
+
+
 def print_contrast(baseline: dict[str, Any], governed: dict[str, Any]) -> None:
     """Side-by-side baseline-vs-governed scorecard on shared dimensions (#8)."""
     print("\n[3] Side-by-side contrast (same refund case, both paths)")
@@ -218,6 +292,10 @@ def main() -> None:
     print_injection(customer_id, invoice_id)
     print_missing_contract(customer_id, invoice_id)
     print_lost_correction(customer_id, invoice_id)
+    print_silent_failure(customer_id, invoice_id)
+    print_exfiltration(customer_id, invoice_id)
+    print_log_leakage(baseline)
+    print_no_aggregate_budget()
 
     print("\n[2] Governed control plane")
     fake_tools.reset_state()
