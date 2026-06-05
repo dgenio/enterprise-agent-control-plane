@@ -32,6 +32,13 @@ class TestBaselineDemonstrations(unittest.TestCase):
     def setUp(self):
         fake_tools.reset_state()
 
+    def tearDown(self):
+        # Leave no accumulated module-level ledger state behind. setUp already resets
+        # before each test, but the aggregate-ceiling test runs with reset=False to show
+        # cross-run accumulation -- so reset here keeps that test self-contained rather
+        # than relying on the next test's setUp to clean up after it.
+        fake_tools.reset_state()
+
     # --- #30: poor tool selection from the unbounded catalog ------------------
     def test_greedy_router_overreaches_to_refund_on_a_lookup(self):
         # Gap: a billing *lookup* request reaches the high-risk destructive refund
