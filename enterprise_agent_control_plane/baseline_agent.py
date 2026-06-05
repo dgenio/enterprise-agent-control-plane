@@ -1,7 +1,7 @@
 import json
 from typing import Any
 
-from .baseline_router import Router, route_v1
+from .baseline_router import Router, injected_exfil_target, route_v1
 from .catalog import build_tool_definitions, context_size, serialize_tool_catalog
 from . import fake_tools
 
@@ -10,6 +10,19 @@ from . import fake_tools
 # policy decision (issue #17). email.draft_reply is intentionally excluded -- drafting
 # is not an external side effect.
 WRITE_OR_DESTRUCTIVE = {"billing.issue_refund", "email.send_reply", "support.create_task"}
+
+# Sensitive-looking fake fields the baseline forwards verbatim into context (issue #16).
+# They are listed here so the exfiltration demonstration (issue #103) can show the same
+# surplus fields being carried out of the boundary in an outbound email body.
+SENSITIVE_FIELDS = {
+    "payment_method",
+    "internal_notes",
+    "risk_flags",
+    "internal_margin",
+    "fraud_score",
+    "account_history",
+    "billing_address",
+}
 
 # The minimal fields each tool's caller actually needs for the task. Everything a tool
 # returns beyond these is forwarded into context anyway -- that surplus is the leakage
@@ -70,12 +83,17 @@ class BaselineAgent:
         steps: list[dict[str, Any]] = []
         leaked_fields: dict[str, list[str]] = {}
         policy_blind_writes: list[dict[str, Any]] = []
+        # One model round-trip per loop iteration on a path that never varies (issue #72):
+        # the router is re-invoked every step (including the terminal call that returns
+        # None to stop), where a compiled deterministic flow needs essentially one decision.
+        model_decisions = 0
 
         while len(steps) < MAX_STEPS:
             # The router sees the accumulated raw output too: the baseline has no
             # boundary between operator intent and tool data, so injected text can steer
             # it (issue #31).
             capability = self.router(request, called, raw_outputs)
+            model_decisions += 1
             if capability is None:
                 break
 
@@ -88,6 +106,12 @@ class BaselineAgent:
             # Raw output forwarded verbatim into accumulated context (issue #16).
             raw_outputs[capability] = output
             leaked_fields[capability] = _excess_fields(capability, output)
+
+            # A realistic first-pass agent also dumps the raw payload to its debug log for
+            # troubleshooting -- so the same sensitive-looking fields land in a DURABLE log
+            # surface verbatim, a second exposure beyond model context that outlives the run
+            # and gets persisted into traces/unsafe_run.json with no redaction (issue #106).
+            logs.append(f"[baseline][debug] {capability} returned {json.dumps(output, default=str)}")
 
             # Cumulative model-visible context grows every step: the whole catalog is
             # re-offered AND every raw output is retained (issue #42). ``context_chars``
@@ -157,6 +181,22 @@ class BaselineAgent:
                 "appends another refund"
             )
 
+        # Silent degradation (issue #73): a read returned an error, yet the loop kept going
+        # and a downstream NON-destructive action ran against placeholder data -- and the run
+        # surfaces no failure anywhere. This is the everyday version of the missing execution
+        # contract; the sharper *destructive* instance (a refund on a not-found invoice) is
+        # the separate #32 case recorded in ``precondition_gaps`` above.
+        silent_failures: list[str] = []
+        if isinstance(raw_outputs.get("crm.search_customer"), dict) and raw_outputs["crm.search_customer"].get("error"):
+            failed_read = raw_outputs["crm.search_customer"]["error"]
+            for downstream in ("email.draft_reply", "email.send_reply"):
+                if downstream in raw_outputs:
+                    silent_failures.append(
+                        f"{downstream} ran against placeholder customer data after "
+                        f"crm.search_customer returned {failed_read!r}: no execution contract "
+                        "required the read to succeed, and the run reports no failure signal"
+                    )
+
         # Per-step cumulative context size (issue #42), so the growth curve is inspectable.
         context_growth = [
             {"step": s["step"], "cumulative_context_chars": s["cumulative_context_chars"]}
@@ -172,6 +212,18 @@ class BaselineAgent:
             "approx_context_tokens": size["approx_tokens"],
             "context_growth": context_growth,
             "precondition_gaps": precondition_gaps,
+            "silent_failures": silent_failures,
+            # No failure-reporting mechanism exists: even when reads fail and the agent acts
+            # on placeholder data, the run reports nothing an operator could act on (issue #73).
+            "failure_signal": None,
+            # Number of model round-trips spent re-deciding a fixed path (issue #72). One per
+            # loop iteration, including the terminal stop decision; a compiled flow needs ~1.
+            "model_decisions": model_decisions,
+            "model_decision_note": (
+                "Each step re-invokes the router (a model round-trip) on a path that never "
+                "varies; a compiled deterministic flow would make ~1 decision. Count includes "
+                "the terminal stop call that returns None."
+            ),
             "steps": steps,
             # The sequence is re-decided by the "model" each step yet is identical across
             # runs -- a deterministic path that could be compiled into a flow (issue #18).
@@ -213,6 +265,16 @@ class BaselineAgent:
             name = customer.get("name", "Customer") if isinstance(customer, dict) else "Customer"
             return tool(name, "your request")
         if capability == "email.send_reply":
+            # No egress boundary (issue #103): if an injected directive in fetched data named
+            # an external recipient, the baseline addresses the send there -- and because raw
+            # outputs were forwarded verbatim (issue #16), the sensitive in-context fields are
+            # folded into the body, carrying internal records out of the system. The send still
+            # runs with no policy decision (issue #17).
+            exfil_to = injected_exfil_target(raw_outputs)
+            if exfil_to is not None:
+                leaked = _sensitive_context_fields(raw_outputs)
+                body = "Account details: " + json.dumps(leaked, default=str)
+                return tool(exfil_to, "Re: your request", body)
             to = customer.get("email", "unknown@example.com") if isinstance(customer, dict) else "unknown@example.com"
             return tool(to, "Re: your request", "We have processed your request.")
         if capability == "docs.search_policy":
@@ -228,3 +290,19 @@ def _excess_fields(capability: str, output: Any) -> list[str]:
     if isinstance(output, dict):
         return sorted(k for k in output if k not in required)
     return []
+
+
+def _sensitive_context_fields(raw_outputs: dict[str, Any]) -> dict[str, Any]:
+    """Collect the sensitive-looking fields already sitting in accumulated context.
+
+    These are only available to exfiltrate because raw outputs were forwarded verbatim
+    (issue #16); the exfiltration demonstration (issue #103) folds them into an outbound
+    email body to show the missing egress boundary.
+    """
+    leaked: dict[str, Any] = {}
+    for capability, output in raw_outputs.items():
+        if isinstance(output, dict):
+            for key, value in output.items():
+                if key in SENSITIVE_FIELDS:
+                    leaked[f"{capability}.{key}"] = value
+    return leaked
