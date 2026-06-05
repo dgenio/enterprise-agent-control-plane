@@ -17,6 +17,7 @@ it usable as evidence rather than a free-text log:
   the deciding policy's version and thresholds; see ``policies.AgentFencePolicy.provenance``.
 """
 
+import copy
 import hashlib
 import json
 from dataclasses import asdict, dataclass, field
@@ -113,6 +114,10 @@ class AuditTrace:
     def record(self, actor: str, action: str, outcome: str, details: dict[str, Any]) -> None:
         prev_hash = self.events[-1].hash if self.events else GENESIS_HASH
         ts = datetime.now(UTC).isoformat()
+        # Store an independent copy so later mutation of the caller's dict -- e.g. the
+        # ``output.frame`` details, which run_case also returns as ``bounded_output`` --
+        # cannot silently alter recorded evidence or invalidate the hash chain.
+        details = copy.deepcopy(details)
         self.events.append(
             AuditEvent(
                 ts=ts,
@@ -146,23 +151,24 @@ def verify_event_chain(events: Iterable[dict[str, Any]]) -> bool:
 
     Each event must link to the previous event's hash (the genesis hash for the first) and
     its stored hash must match a recomputation over its content. A single edited, removed,
-    or reordered event breaks the chain.
+    or reordered event breaks the chain. A malformed event (missing fields) fails
+    verification rather than raising, so a corrupted trace is reported, not crashed on.
     """
     prev_hash = GENESIS_HASH
     for event in events:
         if event.get("prev_hash") != prev_hash:
             return False
         expected = _event_hash(
-            event["ts"],
-            event["actor"],
-            event["action"],
-            event["outcome"],
-            event["details"],
+            event.get("ts"),
+            event.get("actor"),
+            event.get("action"),
+            event.get("outcome"),
+            event.get("details"),
             prev_hash,
         )
         if event.get("hash") != expected:
             return False
-        prev_hash = event["hash"]
+        prev_hash = event.get("hash")
     return True
 
 
@@ -185,7 +191,10 @@ def validate_trace(
         if required_fields is None:
             errors.append(f"event[{index}]: unknown action {action!r}")
             continue
-        details = event.get("details") or {}
+        details = event.get("details")
+        if not isinstance(details, dict):
+            errors.append(f"event[{index}] ({action}): details must be an object")
+            continue
         missing = sorted(required_fields - details.keys())
         if missing:
             errors.append(f"event[{index}] ({action}): missing required detail(s) {missing}")

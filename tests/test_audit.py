@@ -78,6 +78,14 @@ class TestAuditSchema(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("reason" in e for e in result.errors))
 
+    def test_non_dict_details_fails_without_raising(self):
+        # A malformed trace (details is a list) must be reported, not crash the validator.
+        events = [{"action": "shortlist", "details": ["not", "a", "dict"],
+                   "ts": "t", "actor": "a", "outcome": "ok"}]
+        result = validate_trace(events)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("details must be an object" in e for e in result.errors))
+
     def test_incomplete_trace_fails_completeness(self):
         trace = AuditTrace("partial")
         trace.record("agent", "request.received", "ok", _valid_event("request.received"))
@@ -108,6 +116,22 @@ class TestAuditHashChain(unittest.TestCase):
         events = self._trace().as_dict()["events"]
         events[0], events[1] = events[1], events[0]
         self.assertFalse(verify_event_chain(events))
+
+    def test_malformed_event_fails_without_raising(self):
+        # A reloaded event missing required fields must fail verification, not raise.
+        events = self._trace().as_dict()["events"]
+        del events[1]["ts"]
+        self.assertFalse(verify_event_chain(events))
+
+    def test_recorded_details_are_decoupled_from_caller(self):
+        # Mutating the caller's dict after recording must not alter stored evidence or
+        # invalidate the chain (record() stores a copy).
+        trace = AuditTrace("decouple")
+        frame = _valid_event("output.frame")
+        trace.record("agent", "output.frame", "ok", frame)
+        frame["status"] = "mutated"
+        self.assertTrue(trace.verify())
+        self.assertEqual(trace.as_dict()["events"][0]["details"]["status"], "ok")
 
 
 if __name__ == "__main__":
