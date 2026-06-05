@@ -11,7 +11,7 @@ import unittest
 from enterprise_agent_control_plane import fake_tools
 from enterprise_agent_control_plane.flows import FLOW_REGISTRY
 from enterprise_agent_control_plane.governed_agent import GovernedAgent
-from enterprise_agent_control_plane.policies import ACTION_CLASSES
+from enterprise_agent_control_plane.policies import ACTION_CLASSES, AgentFencePolicy
 
 
 def _events(result, action):
@@ -49,6 +49,15 @@ class TestSideEffectBoundary(unittest.TestCase):
         commit = _events(result, "action.commit")
         self.assertEqual([e["details"]["mode"] for e in commit], ["committed"])
 
+    def test_auto_allowed_refund_commits_without_an_approver(self):
+        # An 'allow' (not 'ask') outcome also commits: with the auto-approve limit raised above
+        # INV-9's amount, the refund clears outright and the side effect fires with no approver.
+        agent = GovernedAgent(policy=AgentFencePolicy(refund_auto_limit=200.0))
+        result = agent.run_case("refund request", "C-100", "INV-9")
+        self.assertEqual(result["bounded_output"]["action_status"], "allowed")
+        self.assertEqual(result["bounded_output"]["gated_actions"][0]["commit_mode"], "committed")
+        self.assertEqual(len(fake_tools.REFUNDS), 1)
+
 
 class TestGateEveryWrite(unittest.TestCase):
     """#66 — gating is derived from the flow's writes, not a per-intent hardcode."""
@@ -78,6 +87,20 @@ class TestGateEveryWrite(unittest.TestCase):
         for flow in FLOW_REGISTRY.values():
             for capability in flow.gated_capabilities:
                 self.assertIn(ACTION_CLASSES[capability], ("write", "destructive"))
+
+    def test_two_write_flow_commits_both_writes_on_approval(self):
+        # The success path of #66: with an authorized approver, BOTH gated writes the flow
+        # performs are committed independently -- one refund AND one email side effect.
+        result = GovernedAgent(approver=lambda req: True).run_case(
+            "refund and notify the customer", "C-100", "INV-9"
+        )
+        self.assertEqual(result["flow"], "refund_and_notify")
+        modes = [a["commit_mode"] for a in result["bounded_output"]["gated_actions"]]
+        self.assertEqual(modes, ["committed", "committed"])
+        self.assertEqual(len(fake_tools.REFUNDS), 1)
+        self.assertEqual(len(fake_tools.SENT_EMAILS), 1)
+        committed = [e["details"]["mode"] for e in _events(result, "action.commit")]
+        self.assertEqual(committed, ["committed", "committed"])
 
 
 class TestFailClosedSteps(unittest.TestCase):

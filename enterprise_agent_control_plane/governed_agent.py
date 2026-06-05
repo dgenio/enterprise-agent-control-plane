@@ -362,11 +362,20 @@ class GovernedAgent:
         }
 
     @staticmethod
+    def _invoice_amount(flow_results: list[dict[str, Any]]) -> Optional[float]:
+        """The refund amount from the flow's ``billing.get_invoice`` step, or ``None``.
+
+        Shared by the gate-args builder and the write invocation so the decision and the
+        committed side effect read the amount from one place (issue #36/#66).
+        """
+        invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
+        return invoice.get("amount") if isinstance(invoice, dict) else None
+
+    @staticmethod
     def _gate_args(capability: str, flow_results: list[dict[str, Any]]) -> dict[str, Any]:
         """Build the parameter-aware decision args for a gated write (issue #36/#66)."""
         if capability == "billing.issue_refund":
-            invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
-            return {"amount": invoice.get("amount") if isinstance(invoice, dict) else None}
+            return {"amount": GovernedAgent._invoice_amount(flow_results)}
         return {}
 
     def _settle_write(
@@ -416,8 +425,7 @@ class GovernedAgent:
     ) -> dict[str, Any]:
         """Invoke a gated write tool in dry-run or commit mode (issue #38)."""
         if capability == "billing.issue_refund":
-            invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
-            amount = invoice.get("amount") if isinstance(invoice, dict) else 0.0
+            amount = self._invoice_amount(flow_results) or 0.0
             return self.tools[capability](payload["invoice_id"], amount, "governed refund", commit=commit)
         if capability == "email.send_reply":
             draft = next((r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {})

@@ -125,6 +125,11 @@ class ChainWeaverExecutor:
         A step that fails -- the tool returns an ``{"error": ...}`` payload or raises -- halts
         the flow closed (issue #41): the failing step is recorded with status ``failed`` and
         no later step runs, so a not-found dependency can never reach a downstream write.
+
+        Note the two fail-closed mechanisms are deliberately distinct: a token-blocked step
+        (``token_valid=False``) is per-step least privilege (#111) -- it is skipped and the
+        flow *continues*, since one un-held read need not abort the run -- whereas a *failed*
+        step (#41) halts the whole flow. Either way the tool's side effect never fires.
         """
         flow = FLOW_REGISTRY[flow_id]
         results: list[dict[str, Any]] = []
@@ -174,6 +179,9 @@ class ChainWeaverExecutor:
             return self.tools[capability](payload["customer_name"], "refund review")
         if capability == "support.search_tickets":
             return self.tools[capability](payload["customer_id"])
+        # support.create_task is a gated write (governed_agent settles it after a decision), not
+        # a flow step in any registered flow today. The branch stays so the executor can run a
+        # flow that lists it as a step without a code change; it is unreachable via FLOW_REGISTRY.
         if capability == "support.create_task":
             return self.tools[capability](payload["customer_id"], "Escalated by governed flow")
         return {"error": "unknown_step"}
