@@ -112,6 +112,10 @@ class AuditTrace:
         self.events: list[AuditEvent] = []
 
     def record(self, actor: str, action: str, outcome: str, details: dict[str, Any]) -> None:
+        # ``details`` must be JSON-native (str/int/float/bool/None/list/dict): the hash chain
+        # and :meth:`save` both serialize it with :func:`json.dumps`, so a non-JSON-native
+        # value would either hash via its ``str()`` fallback or fail to save -- keep the
+        # recorded evidence and what is persisted/verified identical.
         prev_hash = self.events[-1].hash if self.events else GENESIS_HASH
         ts = datetime.now(UTC).isoformat()
         # Store an independent copy so later mutation of the caller's dict -- e.g. the

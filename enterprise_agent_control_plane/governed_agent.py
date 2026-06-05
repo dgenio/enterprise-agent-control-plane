@@ -123,7 +123,7 @@ class GovernedAgent:
         if output is None:
             return None
         canonical = json.dumps(output, sort_keys=True, default=str)
-        return f"{record['step']}#{hashlib.sha256(canonical.encode('utf-8')).hexdigest()[:8]}"
+        return f"{record.get('step')}#{hashlib.sha256(canonical.encode('utf-8')).hexdigest()[:8]}"
 
     def _resolve(
         self,
