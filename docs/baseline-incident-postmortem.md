@@ -35,18 +35,21 @@ Run the egress step yourself: the `[1h]` block in `make demo`, or
 ## The investigation (what the logs can't tell you)
 
 Afterward, an investigator opens `traces/unsafe_run.json` — the only record. It is flat
-free-text logs (audit-light, issue #19), so the four questions a reviewer needs answered all
-come back empty:
+free-text logs (audit-light, issue #19): some values are present, but scattered across
+unstructured `[debug]` dumps with nothing that reliably ties a call to its inputs and outputs.
+The four questions a reviewer needs answered cannot be reconstructed from it:
 
-| Question | Why the baseline can't answer it |
+| Question | Why the baseline can't answer it reliably |
 |---|---|
-| **Who** (which principal) requested this? | The baseline runs under no identity; nothing is recorded. |
-| **Which tool ran with which arguments?** | Logs name the tool but not the exact arguments or recipient. |
-| **What did each tool return?** | Only `[debug]` dumps exist (themselves a leak, issue #106) — no structured, queryable output. |
+| **Who** (which principal) requested this? | The baseline runs under no identity; nothing is recorded at all. |
+| **Which tool ran with which arguments?** | The `[baseline]` step lines name only the tool; arguments and the recipient appear, if at all, buried in the raw `[debug]` payload dumps — there is no structured field tying a call to its exact inputs. |
+| **What did each tool return?** | Returned payloads survive only as free-text `[debug]` dumps (themselves a leak, issue #106) — there is no queryable, per-call output record. |
 | **Was anything blocked, and why?** | Nothing was ever gated, so there is no decision to inspect. |
 
-The exposure also **outlives the run**: the sensitive fields were persisted verbatim into the
-log artifact and could be shipped to log aggregation (issue #106).
+The investigative gap is the absence of a **structured, queryable** trace that reliably binds
+each call to its inputs, outputs, and decision — not that every value is missing. The exposure
+also **outlives the run**: those raw payloads were persisted verbatim into the log artifact and
+could be shipped to log aggregation (issue #106).
 
 ## How each gap maps to a control
 
