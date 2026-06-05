@@ -8,18 +8,21 @@ from .audit import AuditTrace
 from .catalog import build_catalog, shortlist_capabilities
 from . import fake_tools
 from .flows import ChainWeaverExecutor, FLOW_REGISTRY, select_flow
-from .policies import ACTION_CLASSES, AgentFencePolicy, PolicyDecision, holds_capability, issue_tokens
+from .policies import (
+    ACTION_CLASSES,
+    AgentFencePolicy,
+    PolicyDecision,
+    holds_capability,
+    issue_tokens,
+    may_approve,
+)
 
 # Sentinel so callers can pass ``approver=None`` to mean "no approver" (leave 'ask'
 # pending) while omitting it falls back to the agent's configured approver.
 _USE_DEFAULT: Any = object()
 
-# The risky action each intent gates before it could take effect (issue #25/#26).
-GATED_ACTION: dict[str, str] = {
-    "refund": "billing.issue_refund",
-    "reply": "email.send_reply",
-    "escalation": "support.create_task",
-}
+# Outcomes that mean a gated action is cleared to take effect (issue #38).
+_COMMITTABLE_OUTCOMES = frozenset({"allowed", "approved"})
 
 # An approver receives an ApprovalRequest and returns True to approve, False to reject.
 Approver = Callable[["ApprovalRequest"], bool]
@@ -50,10 +53,21 @@ class GovernedDecision:
 
 
 class GovernedAgent:
-    def __init__(self, policy: Optional[AgentFencePolicy] = None, approver: Optional[Approver] = None):
+    def __init__(
+        self,
+        policy: Optional[AgentFencePolicy] = None,
+        approver: Optional[Approver] = None,
+        approver_principal: str = "support_manager",
+    ):
         self.catalog = build_catalog()
         self.policy = policy or AgentFencePolicy()
         self.approver = approver
+        # The identity an injected approver acts as; used to enforce separation of duties
+        # (no self-approval) and approver authority for the action class (issue #64).
+        self.approver_principal = approver_principal
+        # Case-scoped idempotency ledger: ``(trace_id, capability)`` keys for writes already
+        # committed by this agent, so replaying the same case does not double-execute (#113).
+        self._committed: set[tuple[str, str]] = set()
         self.tools = {
             "crm.search_customer": fake_tools.crm_search_customer,
             "billing.get_invoice": fake_tools.billing_get_invoice,
@@ -74,12 +88,16 @@ class GovernedAgent:
         args: Optional[dict[str, Any]] = None,
         trace: Optional[AuditTrace] = None,
         approver: Any = _USE_DEFAULT,
+        approver_principal: Any = _USE_DEFAULT,
     ) -> GovernedDecision:
         """Gate one capability: token check (issue #23) -> policy (issues #2/#36) ->
-        approval routing for 'ask' (issue #5). Records an explainable trace event (#27).
+        approval routing for 'ask' (issue #5/#64). Records an explainable trace event (#27).
         """
         args = args or {}
         approver = self.approver if approver is _USE_DEFAULT else approver
+        approver_principal = (
+            self.approver_principal if approver_principal is _USE_DEFAULT else approver_principal
+        )
 
         # Token layer first: an out-of-scope capability for a principal is rejected
         # before any policy evaluation (issue #23).
@@ -94,7 +112,9 @@ class GovernedAgent:
             return decision
 
         policy_decision = self.policy.evaluate(capability, principal, args)
-        outcome, reason = self._resolve(policy_decision, principal, capability, args, approver, trace)
+        outcome, reason = self._resolve(
+            policy_decision, principal, capability, args, approver, approver_principal, trace
+        )
         decision = GovernedDecision(
             capability, principal, policy_decision.action_class,
             policy_decision.decision, outcome, reason, True,
@@ -132,6 +152,7 @@ class GovernedAgent:
         capability: str,
         args: dict[str, Any],
         approver: Optional[Approver],
+        approver_principal: Optional[str],
         trace: Optional[AuditTrace],
     ) -> "tuple[str, str]":
         if policy_decision.decision == "allow":
@@ -146,16 +167,44 @@ class GovernedAgent:
                              {"capability": capability, "reason": policy_decision.reason})
             return "approval_required", policy_decision.reason + " No approver configured; left pending."
 
+        # Separation of duties (issue #64): the approver must be a different, authorized
+        # principal. A self-approval or an approver without authority for this action class is
+        # rejected with a recorded reason -- it never reaches the approver callable.
+        if approver_principal == principal:
+            reason = (
+                policy_decision.reason
+                + f" Rejected: {principal} cannot approve their own {capability} (self-approval)."
+            )
+            if trace is not None:
+                trace.record(principal, "approval.resolved", "denied",
+                             {"capability": capability, "approver": approver_principal,
+                              "authority_basis": "self_approval_rejected"})
+            return "approval_denied", reason
+        if not may_approve(approver_principal, policy_decision.action_class):
+            reason = (
+                policy_decision.reason
+                + f" Rejected: {approver_principal} is not authorized to approve "
+                f"{policy_decision.action_class} actions."
+            )
+            if trace is not None:
+                trace.record(principal, "approval.resolved", "denied",
+                             {"capability": capability, "approver": approver_principal,
+                              "authority_basis": "unauthorized_approver"})
+            return "approval_denied", reason
+
         if trace is not None:
             trace.record(principal, "approval.request", "requested",
                          {"capability": capability, "reason": policy_decision.reason})
         approved = approver(ApprovalRequest(principal, capability, policy_decision.reason, args))
         resolution = "approved" if approved else "denied"
+        authority_basis = f"{approver_principal} authorized for {policy_decision.action_class}"
         if trace is not None:
-            trace.record(principal, "approval.resolved", resolution, {"capability": capability})
+            trace.record(principal, "approval.resolved", resolution,
+                         {"capability": capability, "approver": approver_principal,
+                          "authority_basis": authority_basis})
         if approved:
-            return "approved", policy_decision.reason + " Approved by approver."
-        return "approval_denied", policy_decision.reason + " Rejected by approver."
+            return "approved", policy_decision.reason + f" Approved by {approver_principal}."
+        return "approval_denied", policy_decision.reason + f" Rejected by {approver_principal}."
 
     def run_case(
         self,
@@ -164,8 +213,12 @@ class GovernedAgent:
         invoice_id: str,
         principal: str = "support_agent",
         approver: Any = _USE_DEFAULT,
+        approver_principal: Any = _USE_DEFAULT,
     ) -> dict[str, Any]:
         approver = self.approver if approver is _USE_DEFAULT else approver
+        approver_principal = (
+            self.approver_principal if approver_principal is _USE_DEFAULT else approver_principal
+        )
         trace = AuditTrace(trace_id=f"trace-{customer_id}-{invoice_id}")
 
         intent, flow_id = select_flow(request)
@@ -187,12 +240,13 @@ class GovernedAgent:
                 "decision_reason": f"No governed flow matches request {request!r}.",
                 "action_class": None,
                 "capability_token_valid": None,
+                "gated_actions": [],
             }
             trace.record(principal, "output.frame", "no_match", frame)
             path = self._save_trace(trace, customer_id, invoice_id)
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": None,
-                "visible_tools": [], "decision": None, "bounded_output": frame,
+                "visible_tools": [], "decision": None, "decisions": [], "bounded_output": frame,
                 "audit_trace_path": str(path), "trace": trace,
             }
 
@@ -213,7 +267,7 @@ class GovernedAgent:
         tokens = issue_tokens(principal)
 
         def _on_step(record: dict[str, Any]) -> None:
-            outcome = "ok" if record["token_valid"] else "blocked_no_token"
+            outcome = {"ok": "ok", "blocked_no_token": "blocked_no_token"}.get(record["status"], record["status"])
             trace.record(principal, "flow.step", outcome, {
                 "step": record["step"],
                 "capability": record["capability"],
@@ -221,9 +275,10 @@ class GovernedAgent:
                 "result_ref": self._result_ref(record),
             })
 
+        payload = {"customer_id": customer_id, "invoice_id": invoice_id, "customer_name": "Ari Carter"}
         flow_results = self.executor.run(
             flow_id,
-            {"customer_id": customer_id, "invoice_id": invoice_id, "customer_name": "Ari Carter"},
+            payload,
             token_check=lambda cap: holds_capability(tokens, cap),
             on_step=_on_step,
         )
@@ -231,35 +286,147 @@ class GovernedAgent:
         trace.record(principal, "flow.execute", "ok",
                      {"flow_id": flow_id, "steps": len(executed), "blocked": len(flow_results) - len(executed)})
 
-        # Gate the risky action for this intent with a parameter-aware decision.
-        gated_capability = GATED_ACTION[intent]
-        gate_args: dict[str, Any] = {}
-        if gated_capability == "billing.issue_refund":
-            invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
-            gate_args = {"amount": invoice.get("amount") if isinstance(invoice, dict) else None}
-        decision = self.decide(gated_capability, principal, gate_args, trace=trace, approver=approver)
-
         flow_caps = {step.capability for step in FLOW_REGISTRY[flow_id].steps}
         visible_tools = sorted({c.capability for c in shortlist} | flow_caps)
 
+        # Fail closed (issue #41): if any step failed, the flow halted -- no gated write runs.
+        failed_step = next((r for r in flow_results if r["status"] == "failed"), None)
+        if failed_step is not None:
+            reason = f"step {failed_step['step']!r} ({failed_step['capability']}) failed; flow halted before any write."
+            trace.record(principal, "flow.halt", "halted",
+                         {"step": failed_step["step"], "capability": failed_step["capability"], "reason": reason})
+            frame = {
+                "request": request, "intent": intent, "flow": flow_id,
+                "status": "halted",
+                "flow_steps": [r["step"] for r in flow_results],
+                "gated_capability": None,
+                "action_status": "halted",
+                "decision_reason": reason,
+                "action_class": None,
+                "capability_token_valid": None,
+                "gated_actions": [],
+            }
+            trace.record(principal, "output.frame", "halted", frame)
+            path = self._save_trace(trace, customer_id, invoice_id)
+            return {
+                "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
+                "visible_tools": visible_tools, "decision": None, "decisions": [],
+                "bounded_output": frame, "audit_trace_path": str(path), "trace": trace,
+            }
+
+        # Gate EVERY write/destructive capability the flow performs, not one hardcoded action
+        # (issue #66). Each gets its own parameter-aware decision; an allowed/approved write is
+        # then committed exactly once per case (issues #38/#113).
+        decisions: list[GovernedDecision] = []
+        gated_actions: list[dict[str, Any]] = []
+        for capability in FLOW_REGISTRY[flow_id].gated_capabilities:
+            gate_args = self._gate_args(capability, flow_results)
+            decision = self.decide(
+                capability, principal, gate_args, trace=trace,
+                approver=approver, approver_principal=approver_principal,
+            )
+            commit_mode = self._settle_write(capability, decision, trace, principal, payload, flow_results)
+            decisions.append(decision)
+            gated_actions.append({
+                "capability": capability,
+                "action_status": decision.outcome,
+                "action_class": decision.action_class,
+                "decision_reason": decision.reason,
+                "capability_token_valid": decision.token_valid,
+                "commit_mode": commit_mode,
+            })
+
+        primary = gated_actions[0] if gated_actions else None
         frame = {
             "request": request, "intent": intent, "flow": flow_id,
             "status": "ok",
             "flow_steps": [r["step"] for r in flow_results],
-            "gated_capability": gated_capability,
-            "action_status": decision.outcome,
-            "decision_reason": decision.reason,
-            "action_class": decision.action_class,
-            "capability_token_valid": decision.token_valid,
+            # Singular fields describe the primary gated action (the first the flow performs)
+            # for at-a-glance reading; ``gated_actions`` is the authoritative per-write list.
+            "gated_capability": primary["capability"] if primary else None,
+            "action_status": primary["action_status"] if primary else None,
+            "decision_reason": primary["decision_reason"] if primary else None,
+            "action_class": primary["action_class"] if primary else None,
+            "capability_token_valid": primary["capability_token_valid"] if primary else None,
+            "gated_actions": gated_actions,
         }
         trace.record(principal, "output.frame", "ok", frame)
 
         path = self._save_trace(trace, customer_id, invoice_id)
         return {
             "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
-            "visible_tools": visible_tools, "decision": decision.as_dict(),
+            "visible_tools": visible_tools,
+            "decision": decisions[0].as_dict() if decisions else None,
+            "decisions": [d.as_dict() for d in decisions],
             "bounded_output": frame, "audit_trace_path": str(path), "trace": trace,
         }
+
+    @staticmethod
+    def _gate_args(capability: str, flow_results: list[dict[str, Any]]) -> dict[str, Any]:
+        """Build the parameter-aware decision args for a gated write (issue #36/#66)."""
+        if capability == "billing.issue_refund":
+            invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
+            return {"amount": invoice.get("amount") if isinstance(invoice, dict) else None}
+        return {}
+
+    def _settle_write(
+        self,
+        capability: str,
+        decision: GovernedDecision,
+        trace: AuditTrace,
+        principal: str,
+        payload: dict[str, Any],
+        flow_results: list[dict[str, Any]],
+    ) -> str:
+        """Apply the side-effect boundary for one gated write (issues #38/#113).
+
+        The write is committed only on an allowed/approved outcome, and only once per case:
+        a replay of the same case is recognized via the idempotency ledger and recorded as a
+        no-op. Any other outcome leaves the world unchanged (a dry-run). The mode -- one of
+        ``committed`` / ``replay`` / ``dry_run`` -- is recorded as an ``action.commit`` event.
+        """
+        if decision.outcome not in _COMMITTABLE_OUTCOMES:
+            # Not cleared to act: exercise the tool's dry-run path so nothing mutates.
+            self._invoke_write(capability, payload, flow_results, commit=False)
+            trace.record(principal, "action.commit", "dry_run",
+                         {"capability": capability, "mode": "dry_run",
+                          "reason": f"outcome {decision.outcome!r} is not committable; no side effect."})
+            return "dry_run"
+
+        key = (trace.trace_id, capability)
+        if key in self._committed:
+            trace.record(principal, "action.commit", "replay",
+                         {"capability": capability, "mode": "replay",
+                          "reason": f"{capability} already committed for case {trace.trace_id!r}; replay is a no-op."})
+            return "replay"
+
+        self._invoke_write(capability, payload, flow_results, commit=True)
+        self._committed.add(key)
+        trace.record(principal, "action.commit", "committed",
+                     {"capability": capability, "mode": "committed",
+                      "reason": f"outcome {decision.outcome!r}; side effect committed once for case {trace.trace_id!r}."})
+        return "committed"
+
+    def _invoke_write(
+        self,
+        capability: str,
+        payload: dict[str, Any],
+        flow_results: list[dict[str, Any]],
+        commit: bool,
+    ) -> dict[str, Any]:
+        """Invoke a gated write tool in dry-run or commit mode (issue #38)."""
+        if capability == "billing.issue_refund":
+            invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
+            amount = invoice.get("amount") if isinstance(invoice, dict) else 0.0
+            return self.tools[capability](payload["invoice_id"], amount, "governed refund", commit=commit)
+        if capability == "email.send_reply":
+            draft = next((r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {})
+            subject = draft.get("subject", "Update on your request") if isinstance(draft, dict) else "Update"
+            body = draft.get("body", "") if isinstance(draft, dict) else ""
+            return self.tools[capability]("[FAKE] customer@example.com", subject, body, commit=commit)
+        if capability == "support.create_task":
+            return self.tools[capability](payload["customer_id"], "Escalated by governed flow", commit=commit)
+        return {"error": "unknown_write", "capability": capability}
 
     def run_decision_scenario(
         self,

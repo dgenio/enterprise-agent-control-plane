@@ -38,6 +38,8 @@ ACTION_VOCABULARY: dict[str, set[str]] = {
     "flow.select": {"intent", "reason"},
     "flow.execute": {"flow_id", "steps"},
     "flow.step": {"step", "capability", "token_valid", "result_ref"},
+    # A flow that halts fail-closed on a failed step (issue #41).
+    "flow.halt": {"step", "capability", "reason"},
     "policy.decision": {
         "capability",
         "principal",
@@ -49,7 +51,12 @@ ACTION_VOCABULARY: dict[str, set[str]] = {
         "policy_thresholds",
     },
     "approval.request": {"capability", "reason"},
-    "approval.resolved": {"capability"},
+    # The resolution records who approved/rejected and the basis for their authority so the
+    # trace answers separation-of-duties questions (issue #64).
+    "approval.resolved": {"capability", "approver"},
+    # A gated write's side-effect outcome: committed, withheld as a dry-run, or recognized as
+    # an idempotent replay (issues #38 / #113).
+    "action.commit": {"capability", "mode"},
     "output.frame": {"request", "intent", "flow", "status"},
 }
 

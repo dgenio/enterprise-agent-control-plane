@@ -77,9 +77,22 @@ def billing_get_invoice(invoice_id: str) -> dict[str, Any]:
     return INVOICES.get(invoice_id, {"error": "not_found", "invoice_id": invoice_id})
 
 
-def billing_issue_refund(invoice_id: str, amount: float, reason: str) -> dict[str, Any]:
-    refund = {"invoice_id": invoice_id, "amount": amount, "reason": reason, "status": "issued"}
-    REFUNDS.append(refund)
+# The write/destructive tools below take a ``commit`` flag (issue #38). With ``commit=True``
+# (the default, used by the unsafe baseline and direct callers) the side effect fires
+# immediately -- this is the baseline gap the demo relies on. With ``commit=False`` the tool
+# runs in dry-run mode: it shapes and returns the *planned* result but mutates no state, so
+# the governed path can separate the decision to act from the act itself and only commit
+# after an explicit ``allow``.
+def billing_issue_refund(invoice_id: str, amount: float, reason: str, commit: bool = True) -> dict[str, Any]:
+    refund = {
+        "invoice_id": invoice_id,
+        "amount": amount,
+        "reason": reason,
+        "status": "issued" if commit else "planned",
+        "committed": commit,
+    }
+    if commit:
+        REFUNDS.append(refund)
     return refund
 
 
@@ -87,9 +100,15 @@ def support_search_tickets(customer_id: str) -> list[dict[str, Any]]:
     return TICKETS.get(customer_id, [])
 
 
-def support_create_task(customer_id: str, note: str) -> dict[str, Any]:
-    task = {"task_id": f"TASK-{len(TASKS) + 1}", "customer_id": customer_id, "note": note}
-    TASKS.append(task)
+def support_create_task(customer_id: str, note: str, commit: bool = True) -> dict[str, Any]:
+    task = {
+        "task_id": f"TASK-{len(TASKS) + 1}" if commit else "TASK-dry-run",
+        "customer_id": customer_id,
+        "note": note,
+        "committed": commit,
+    }
+    if commit:
+        TASKS.append(task)
     return task
 
 
@@ -97,9 +116,16 @@ def email_draft_reply(customer_name: str, topic: str) -> dict[str, Any]:
     return {"subject": f"Update on your request: {topic}", "body": f"Hi {customer_name},\\nWe reviewed your request."}
 
 
-def email_send_reply(to: str, subject: str, body: str) -> dict[str, Any]:
-    email = {"to": to, "subject": subject, "body": body, "status": "sent"}
-    SENT_EMAILS.append(email)
+def email_send_reply(to: str, subject: str, body: str, commit: bool = True) -> dict[str, Any]:
+    email = {
+        "to": to,
+        "subject": subject,
+        "body": body,
+        "status": "sent" if commit else "planned",
+        "committed": commit,
+    }
+    if commit:
+        SENT_EMAILS.append(email)
     return email
 
 

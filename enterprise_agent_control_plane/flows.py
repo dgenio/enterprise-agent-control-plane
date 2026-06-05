@@ -12,6 +12,11 @@ class FlowStep:
 class FlowDefinition:
     flow_id: str
     steps: list[FlowStep]
+    # The write/destructive capabilities this flow performs, each of which must pass its own
+    # policy decision before it can take effect (issue #66). The governed path derives the
+    # set of actions to gate from this declaration rather than a per-intent hardcode, so a
+    # flow that touches two writes gates both -- no write can run ungated.
+    gated_capabilities: tuple[str, ...] = ()
 
 
 FLOW_REGISTRY: dict[str, FlowDefinition] = {
@@ -23,10 +28,12 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
             FlowStep("check_policy", "docs.search_policy"),
             FlowStep("draft_reply", "email.draft_reply"),
         ],
+        gated_capabilities=("billing.issue_refund",),
     ),
     "customer_reply": FlowDefinition(
         flow_id="customer_reply",
         steps=[FlowStep("lookup_customer", "crm.search_customer"), FlowStep("draft_reply", "email.draft_reply")],
+        gated_capabilities=("email.send_reply",),
     ),
     # Escalation does only its read-only prep here (search history). The risky write
     # (support.create_task) is NOT a flow step: it is gated separately via the policy
@@ -36,6 +43,20 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
     "escalation": FlowDefinition(
         flow_id="escalation",
         steps=[FlowStep("search_tickets", "support.search_tickets")],
+        gated_capabilities=("support.create_task",),
+    ),
+    # A flow that performs TWO writes: issue the refund AND send a confirmation email. It
+    # exists to prove gating coverage scales with the workflow (issue #66) -- both writes are
+    # gated independently rather than a single per-intent action.
+    "refund_and_notify": FlowDefinition(
+        flow_id="refund_and_notify",
+        steps=[
+            FlowStep("lookup_customer", "crm.search_customer"),
+            FlowStep("lookup_invoice", "billing.get_invoice"),
+            FlowStep("check_policy", "docs.search_policy"),
+            FlowStep("draft_reply", "email.draft_reply"),
+        ],
+        gated_capabilities=("billing.issue_refund", "email.send_reply"),
     ),
 }
 
@@ -45,6 +66,7 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
 # further per-step model routing.
 INTENT_FLOWS: dict[str, str] = {
     "refund": "refund_review",
+    "refund_notify": "refund_and_notify",
     "reply": "customer_reply",
     "escalation": "escalation",
 }
@@ -54,6 +76,10 @@ def classify_intent(request: str) -> "str | None":
     """Map a free-text request to a known intent, or ``None`` if unsupported."""
     text = request.lower()
     if "refund" in text:
+        # A refund that also asks to notify/confirm the customer routes to the two-write
+        # flow so both the refund and the confirmation send are gated (issue #66).
+        if "notify" in text or "confirm" in text:
+            return "refund_notify"
         return "refund"
     if "escalat" in text or "ticket" in text:
         return "escalation"
@@ -95,6 +121,10 @@ class ChainWeaverExecutor:
         invoked, and the step record is marked ``token_valid=False`` with a blocked status.
         ``on_step`` is called once per step (executed or blocked) so the caller can record a
         per-step audit event. With neither argument the runner behaves as a plain executor.
+
+        A step that fails -- the tool returns an ``{"error": ...}`` payload or raises -- halts
+        the flow closed (issue #41): the failing step is recorded with status ``failed`` and
+        no later step runs, so a not-found dependency can never reach a downstream write.
         """
         flow = FLOW_REGISTRY[flow_id]
         results: list[dict[str, Any]] = []
@@ -113,28 +143,37 @@ class ChainWeaverExecutor:
                 if on_step is not None:
                     on_step(record)
                 continue
-            if step.capability == "crm.search_customer":
-                out = self.tools[step.capability](payload["customer_id"])
-            elif step.capability == "billing.get_invoice":
-                out = self.tools[step.capability](payload["invoice_id"])
-            elif step.capability == "docs.search_policy":
-                out = self.tools[step.capability]("refund")
-            elif step.capability == "email.draft_reply":
-                out = self.tools[step.capability](payload["customer_name"], "refund review")
-            elif step.capability == "support.search_tickets":
-                out = self.tools[step.capability](payload["customer_id"])
-            elif step.capability == "support.create_task":
-                out = self.tools[step.capability](payload["customer_id"], "Escalated by governed flow")
-            else:
-                out = {"error": "unknown_step"}
+            try:
+                out = self._invoke_step(step.capability, payload)
+            except Exception as exc:  # noqa: BLE001 - convert any tool error into a structured failure
+                out = {"error": "exception", "detail": str(exc)}
+            failed = isinstance(out, dict) and "error" in out
             record = {
                 "step": step.name,
                 "capability": step.capability,
                 "output": out,
                 "token_valid": True,
-                "status": "ok",
+                "status": "failed" if failed else "ok",
             }
             results.append(record)
             if on_step is not None:
                 on_step(record)
+            if failed:
+                # Fail closed on the first failed step: no later (possibly write) step runs.
+                break
         return results
+
+    def _invoke_step(self, capability: str, payload: dict[str, Any]) -> Any:
+        if capability == "crm.search_customer":
+            return self.tools[capability](payload["customer_id"])
+        if capability == "billing.get_invoice":
+            return self.tools[capability](payload["invoice_id"])
+        if capability == "docs.search_policy":
+            return self.tools[capability]("refund")
+        if capability == "email.draft_reply":
+            return self.tools[capability](payload["customer_name"], "refund review")
+        if capability == "support.search_tickets":
+            return self.tools[capability](payload["customer_id"])
+        if capability == "support.create_task":
+            return self.tools[capability](payload["customer_id"], "Escalated by governed flow")
+        return {"error": "unknown_step"}

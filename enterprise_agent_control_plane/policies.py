@@ -203,6 +203,24 @@ ROLE_GRANTS: dict[str, set[str]] = {
 }
 
 
+# --- Approver authority for 'ask' decisions / separation of duties (issue #64) -----
+# Which principals may approve which action classes. Approval of money movement or outbound
+# messages must come from an authorized second party (not the requester), so the requesting
+# support_agent cannot approve their own refund. Read actions are never gated to 'ask', so
+# they never reach an approver.
+APPROVER_AUTHORITY: dict[str, set[ActionClass]] = {
+    "support_manager": {"write", "destructive"},
+    "supervisor": {"write", "destructive"},
+}
+
+
+def may_approve(approver_principal: str, action_class: Optional[ActionClass]) -> bool:
+    """True if ``approver_principal`` is authorized to approve the given action class (#64)."""
+    if action_class is None:
+        return False
+    return action_class in APPROVER_AUTHORITY.get(approver_principal, set())
+
+
 def issue_tokens(principal: str, expires: Optional[datetime] = None) -> list[CapabilityToken]:
     """Mint the scoped capability tokens a principal's role grants (issue #23)."""
     grants = ROLE_GRANTS.get(principal, set())
