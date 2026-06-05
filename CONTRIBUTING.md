@@ -21,6 +21,8 @@ make test    # run the unit test suite
 - `make demo` runs `apps/demo_cli/main.py`: the unsafe baseline across a
   realistic multi-case workload, then the governed control plane, then a
   side-by-side contrast.
+- `make baseline` runs `apps/baseline_cli/main.py`: the unsafe baseline alone,
+  refreshing `traces/unsafe_run.json` and reporting aggregate side effects.
 - `make test` runs `python -m unittest discover -s tests -p "test_*.py"`. All
   tests are offline and deterministic; add new tests with the same `unittest`
   style as the existing files under `tests/`.

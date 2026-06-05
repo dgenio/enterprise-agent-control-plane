@@ -87,7 +87,16 @@ annotates each risk, then contrasts it with the governed path.
      mere lookup),
    - **indirect prompt injection** (a planted `[FAKE]` ticket directive steers a write),
    - **no execution contract** (a refund fires on a not-found invoice, with no amount
-     bound and no idempotency guard),
+     bound and no idempotency guard; a read failure is silently absorbed and a
+     non-destructive action still runs against placeholder data),
+   - **per-step model round-trips** (a fixed path re-decided every step instead of being
+     compiled into a flow),
+   - **sensitive-data exfiltration** (an injected `[FAKE]` directive redirects an outbound
+     email to an external address with no egress boundary),
+   - **durable-log leakage** (raw payloads, including sensitive-looking fields, persisted
+     verbatim into `traces/unsafe_run.json` with no redaction),
+   - **no aggregate budget** (nothing caps the count of writes or total money moved across
+     a session),
    - policy-blind writes, audit-light logging, and a **lost operator correction** that
      recurs because nothing captures it.
 2. **Governed path**
@@ -100,9 +109,17 @@ annotates each risk, then contrasts it with the governed path.
    dimensions (tools exposed, raw fields in context, ungated writes, policy decisions,
    audit trace).
 
+Run just the baseline with `make baseline`: it refreshes the audit-light
+[`traces/unsafe_run.json`](traces/unsafe_run.json) artifact from a real run and reports the
+session's aggregate side effects.
+
 Illustrative, inert fixtures live under [`demos/`](demos/) (a risky AI-generated change
-no pre-merge gate would catch). The lesson-capture gap is written up in
-[`docs/lesson-capture-gap.md`](docs/lesson-capture-gap.md).
+no pre-merge gate would catch). The baseline "before" is written up in
+[`docs/lesson-capture-gap.md`](docs/lesson-capture-gap.md),
+[`docs/baseline-model-fidelity.md`](docs/baseline-model-fidelity.md) (why the gaps are
+architectural, not a strawman), and
+[`docs/baseline-incident-postmortem.md`](docs/baseline-incident-postmortem.md) (the gaps
+combined into one un-investigable incident).
 
 ## What this demonstrates
 
