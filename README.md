@@ -109,6 +109,10 @@ annotates each risk, then contrasts it with the governed path.
    dimensions (tools exposed, raw fields in context, ungated writes, policy decisions,
    audit trace).
 
+For the full before/after mapping — each baseline risk paired with the governed control
+that closes it, the dgenio library it maps to, and where it lives in the code — see the
+[control traceability matrix](docs/control-traceability.md).
+
 Run just the baseline with `make baseline`: it refreshes the audit-light
 [`traces/unsafe_run.json`](traces/unsafe_run.json) artifact from a real run and reports the
 session's aggregate side effects.
@@ -161,9 +165,12 @@ Start at the [documentation index](docs/README.md). Highlights:
 - [FAQ](docs/faq.md) — common agent-governance questions answered directly.
 - [Recommended adoption path](docs/adoption-path.md) — layer the controls one at a time.
 - [Comparison](docs/comparison.md) — how this relates to neighboring approaches.
+- [Control traceability matrix](docs/control-traceability.md) — each baseline risk mapped to its governed control, library, and code.
 
-How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md). Security scope and
-reporting: [`SECURITY.md`](SECURITY.md).
+How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md) and our
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Security scope and reporting:
+[`SECURITY.md`](SECURITY.md). Release history: [`CHANGELOG.md`](CHANGELOG.md).
+Working in this repo as an AI coding agent? See [`AGENTS.md`](AGENTS.md).
 
 ## Disclaimer
 

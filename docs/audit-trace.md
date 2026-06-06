@@ -60,3 +60,11 @@ verification.
 uses a plain hash chain with no signatures, key management, or external timestamping, and
 makes no claim of cryptographic non-repudiation. It demonstrates the shape of a trustworthy
 audit trace; a production system would layer real signing and storage controls on top.
+
+## Related
+
+- [Governance model](governance-model.md) — the decisions recorded in the trace.
+- [Architecture](architecture.md) — where audit sits in the data flow.
+- [Baseline incident post-mortem](baseline-incident-postmortem.md) — what audit-light logs can't answer.
+- [Glossary](glossary.md) — definitions.
+- [Docs index](README.md) — the full documentation map.

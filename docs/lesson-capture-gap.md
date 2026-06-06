@@ -37,3 +37,10 @@ its first reviewed lesson.
 A related class of lost-correction risk — an AI-generated change that quietly erodes
 safety with no pre-merge gate — is demonstrated separately in
 [`demos/README.md`](../demos/README.md) (issue #35).
+
+## Related
+
+- [Threat model](threat-model.md) — the baseline risks, including lost corrections.
+- [Control traceability matrix](control-traceability.md) — risk → control → library.
+- [Glossary](glossary.md) — definitions.
+- [Docs index](README.md) — the full documentation map.
