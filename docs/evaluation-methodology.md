@@ -40,3 +40,10 @@ policy changes cannot merge an unevaluated regression.
 integration point is `evals.py`: the committed datasets and the `evaluate_routers` /
 `evaluate_policy` entry points map onto its offline-scoring API. This remains a reference
 pattern, not a production evaluation harness.
+
+## Related
+
+- [Governance model](governance-model.md) — the policy decisions the policy lane scores.
+- [Adoption path](adoption-path.md) — where offline evaluation fits in the sequence.
+- [Glossary](glossary.md) — definitions.
+- [Docs index](README.md) — the full documentation map.

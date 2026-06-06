@@ -26,6 +26,8 @@ documentation; start here, then follow the links below.
 - [Audit trace](audit-trace.md) — the event schema, per-step events, decision
   provenance, and the tamper-evident (hash-chained) reference pattern.
 - [Threat model](threat-model.md) — the baseline risks each control addresses.
+- [Control traceability matrix](control-traceability.md) — each baseline risk
+  mapped to the governed control, the dgenio library, and the code.
 - [Evaluation methodology](evaluation-methodology.md) — offline scoring of
   candidate routers and policies.
 
@@ -40,6 +42,7 @@ documentation; start here, then follow the links below.
 
 ## Project direction & reuse
 
+- [Changelog](../CHANGELOG.md) — what has shipped, by version.
 - [Roadmap](roadmap.md) — what is planned next.
 - [The lesson-capture gap](lesson-capture-gap.md) — a worked baseline "before".
 - [Baseline model-stand-in fidelity](baseline-model-fidelity.md) — why the "before"

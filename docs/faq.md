@@ -60,3 +60,10 @@ No. It is a runnable **reference architecture and learning repository**. The
 tools and data are synthetic, the model is replaced by a deterministic offline
 router, and there are no security guarantees. See [`SECURITY.md`](../SECURITY.md)
 and the "What this is / is not" section of the [README](../README.md).
+
+## Related
+
+- [Glossary](glossary.md) — definitions for the terms above.
+- [Architecture](architecture.md) — how the control plane is wired together.
+- [Comparison](comparison.md) — how this relates to neighboring approaches.
+- [Docs index](README.md) — the full documentation map.
