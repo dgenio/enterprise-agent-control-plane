@@ -57,6 +57,13 @@ ACTION_VOCABULARY: dict[str, set[str]] = {
     # A gated write's side-effect outcome: committed, withheld as a dry-run, or recognized as
     # an idempotent replay (issues #38 / #113).
     "action.commit": {"capability", "mode"},
+    # A bounded Frame wrapping one flow step's output: summary + opaque handle, with raw detail
+    # redacted behind the handle (issues #22 / #37). The handle and redacted-field list make
+    # the context-firewall boundary auditable without recording the raw payload.
+    "flow.frame": {"capability", "handle", "redacted_fields"},
+    # A governed, audited expansion of a Frame's redacted raw detail (issue #114): records the
+    # handle and the principal-checked outcome so the trace answers "who revealed what, when".
+    "frame.expand": {"handle", "outcome"},
     "output.frame": {"request", "intent", "flow", "status"},
 }
 

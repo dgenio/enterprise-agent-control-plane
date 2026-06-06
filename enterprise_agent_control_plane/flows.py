@@ -113,6 +113,7 @@ class ChainWeaverExecutor:
         payload: dict[str, Any],
         token_check: Optional[Callable[[str], bool]] = None,
         on_step: Optional[Callable[[dict[str, Any]], None]] = None,
+        budget: Optional["set[str] | frozenset[str]"] = None,
     ) -> list[dict[str, Any]]:
         """Run a flow deterministically, optionally gating each step on a capability token.
 
@@ -122,6 +123,13 @@ class ChainWeaverExecutor:
         ``on_step`` is called once per step (executed or blocked) so the caller can record a
         per-step audit event. With neither argument the runner behaves as a plain executor.
 
+        ``budget`` (issue #110) is the case's authoritative capability budget — the bounded
+        shortlist made enforceable. When supplied, the executor may only invoke capabilities
+        in the budget; a step that needs a capability the shortlist did not surface *fails
+        closed* (status ``failed`` with an ``out_of_budget`` error) and halts the flow, rather
+        than silently widening exposure to the full tool map. ``budget=None`` disables the
+        check (a plain executor).
+
         A step that fails -- the tool returns an ``{"error": ...}`` payload or raises -- halts
         the flow closed (issue #41): the failing step is recorded with status ``failed`` and
         no later step runs, so a not-found dependency can never reach a downstream write.
@@ -129,11 +137,28 @@ class ChainWeaverExecutor:
         Note the two fail-closed mechanisms are deliberately distinct: a token-blocked step
         (``token_valid=False``) is per-step least privilege (#111) -- it is skipped and the
         flow *continues*, since one un-held read need not abort the run -- whereas a *failed*
-        step (#41) halts the whole flow. Either way the tool's side effect never fires.
+        step (#41/#110) halts the whole flow. Either way the tool's side effect never fires.
         """
         flow = FLOW_REGISTRY[flow_id]
         results: list[dict[str, Any]] = []
         for step in flow.steps:
+            if budget is not None and step.capability not in budget:
+                # Out of budget: the shortlist never surfaced this capability, so the flow
+                # fails closed here rather than reaching beyond the bounded budget (issue #110).
+                record = {
+                    "step": step.name,
+                    "capability": step.capability,
+                    "output": {
+                        "error": "out_of_budget",
+                        "detail": f"{step.capability} is outside the case capability budget",
+                    },
+                    "token_valid": True,
+                    "status": "failed",
+                }
+                results.append(record)
+                if on_step is not None:
+                    on_step(record)
+                break
             token_valid = True if token_check is None else token_check(step.capability)
             if not token_valid:
                 # Fail closed: no token, so the tool never runs (issue #111).
