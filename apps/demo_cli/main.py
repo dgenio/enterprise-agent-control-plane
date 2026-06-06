@@ -303,10 +303,11 @@ def main() -> None:
     governed = agent.run_case("refund request", customer_id, invoice_id, principal="support_agent")
     print(f"Principal: support_agent | intent: {governed['intent']} -> flow: {governed['flow']}")
     metric = governed["context_metric"]
-    print(
-        f"Context firewall (#24): model-visible shortlist = {metric['shortlist_chars']} chars "
-        f"vs full catalog {metric['full_catalog_chars']} chars ({metric['reduction_pct']}% smaller)"
-    )
+    if metric:
+        print(
+            f"Context firewall (#24): model-visible shortlist = {metric['shortlist_chars']} chars "
+            f"vs full catalog {metric['full_catalog_chars']} chars ({metric['reduction_pct']}% smaller)"
+        )
     print(f"Enforced capability budget (#110): {len(governed['visible_tools'])} -> {governed['visible_tools']}")
     print(f"Deterministic flow steps: {governed['bounded_output']['flow_steps']}")
     if governed["frames"]:

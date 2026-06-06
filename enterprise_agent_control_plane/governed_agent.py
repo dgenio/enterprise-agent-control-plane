@@ -262,11 +262,13 @@ class GovernedAgent:
         shortlist = shortlist_capabilities(request, self.catalog)
         context_metric = context_reduction(shortlist, build_tool_definitions())
 
-        # The case capability budget (issue #110): the bounded shortlist made authoritative.
-        # It is the union of the model-visible shortlist and the selected flow's step + gated
-        # capabilities, computed BEFORE execution and enforced by the executor -- not a post-hoc
-        # union reported after running against the full tool map. ``visible_tools`` is this
-        # enforced budget. A caller may override it to prove fail-closed behavior.
+        # The case capability budget (issue #110): the bounded shortlist made enforceable at the
+        # executor. It is the union of the model-visible shortlist and the selected flow's step +
+        # gated capabilities, computed BEFORE execution and enforced by the executor -- not a
+        # post-hoc union reported after running against the full tool map. ``visible_tools`` is
+        # this enforced budget. Note the default budget contains the flow's own capabilities by
+        # construction, so on a normal case it never spuriously halts a real step; the executor's
+        # out-of-budget fail-closed path is exercised by a narrowed ``capability_budget`` override.
         flow = FLOW_REGISTRY[flow_id]
         flow_caps = {step.capability for step in flow.steps}
         if capability_budget is None:
