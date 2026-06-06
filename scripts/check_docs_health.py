@@ -62,8 +62,13 @@ def check_links(root: Path | None = None) -> list[str]:
             if not path_part:
                 continue
             resolved = (md.parent / path_part).resolve()
-            if not resolved.exists():
-                rel = md.relative_to(root)
+            rel = md.relative_to(root)
+            if not resolved.is_relative_to(root.resolve()):
+                # A link that resolves outside the repo (``../../...``) is not a
+                # valid repo-internal link, even if the path happens to exist on
+                # the runner -- flag it rather than silently passing.
+                errors.append(f"{rel}: internal link escapes repo root -> {target!r}")
+            elif not resolved.exists():
                 errors.append(f"{rel}: broken internal link -> {target!r}")
     return errors
 

@@ -24,7 +24,7 @@ Everything is offline and key-free. The only runtime dependency is `pydantic`.
 ```bash
 make setup   # python -m pip install -e .
 make demo    # run the baseline-vs-governed demo (apps/demo_cli)
-make baseline# run the unsafe baseline alone; refresh traces/unsafe_run.json
+make baseline # run the unsafe baseline alone; refresh traces/unsafe_run.json
 make test    # python -m unittest discover -s tests -p "test_*.py"
 make eval    # run the offline evaluation regression gate
 ```

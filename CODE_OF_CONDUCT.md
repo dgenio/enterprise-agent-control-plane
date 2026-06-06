@@ -30,9 +30,9 @@ representing the project in public spaces.
 ## Reporting
 
 If you experience or witness unacceptable behavior, report it privately to the
-repository maintainer, [@dgenio](https://github.com/dgenio), through GitHub
-(for example, a direct message or a private report on a relevant item). For
-non-sensitive concerns about the example code or documentation, you may also
+repository maintainer, [@dgenio](https://github.com/dgenio), using the contact
+information published on their GitHub profile. For non-sensitive concerns about
+the example code or documentation, you may also
 [open a GitHub issue](https://github.com/dgenio/enterprise-agent-control-plane/issues).
 
 All reports will be reviewed and handled as confidentially as the platform
