@@ -22,8 +22,9 @@ import re
 import sys
 from pathlib import Path
 
-# Markdown inline link: [text](target) -- target captured. Reference-style and image links
-# share the same target syntax, so this covers the internal-link cases the docs use.
+# Markdown inline link: [text](target) -- target captured. Image links (``![alt](src)``) use
+# the same ``(target)`` syntax and are covered too. Reference-style links (``[text][ref]``)
+# are not matched, which is fine since the docs use inline links throughout.
 _LINK = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
 
 # The files that must carry the canonical description verbatim.
