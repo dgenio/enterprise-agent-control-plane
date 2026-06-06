@@ -1,0 +1,24 @@
+name: docs-health
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  docs-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Check internal docs links and canonical description
+        # Dependency-free, offline guard (issue #101): every relative Markdown link in
+        # README.md / docs/ must resolve, and the canonical description in METADATA.md must
+        # appear verbatim in README.md, pyproject.toml, and CITATION.cff.
+        run: python scripts/check_docs_health.py

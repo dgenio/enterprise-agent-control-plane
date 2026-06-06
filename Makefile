@@ -1,4 +1,4 @@
-.PHONY: setup demo baseline test eval
+.PHONY: setup demo baseline test eval docs-health
 
 setup:
 	python -m pip install -e .
@@ -14,3 +14,6 @@ test:
 
 eval:
 	python -m enterprise_agent_control_plane.evals
+
+docs-health:
+	python scripts/check_docs_health.py
