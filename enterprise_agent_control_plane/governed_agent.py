@@ -272,7 +272,10 @@ class GovernedAgent:
         if capability_budget is None:
             budget = {c.capability for c in shortlist} | flow_caps | set(flow.gated_capabilities)
         else:
-            budget = set(capability_budget)
+            # An override still always includes the flow's gated capabilities, so a gated write
+            # can never be settled outside the enforced budget / visible_tools even when a
+            # caller deliberately narrows the budget -- keeping the boundary self-consistent.
+            budget = set(capability_budget) | set(flow.gated_capabilities)
         visible_tools = sorted(budget)
 
         trace.record(principal, "shortlist", "ok", {

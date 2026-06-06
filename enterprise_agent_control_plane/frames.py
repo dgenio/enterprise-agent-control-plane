@@ -89,8 +89,10 @@ class FrameStore:
         """
         keys = field_names(output)
         redacted = [k for k in keys if k in sensitive_fields]
-        # An opaque, content-addressed handle. The store size is folded in so two steps that
-        # return identical payloads still get distinct handles.
+        # An opaque handle, unique per wrap. The store size is folded into the digest so two
+        # steps that return identical payloads still get distinct handles -- this is
+        # deliberately NOT a pure content address, so callers must not assume handle stability
+        # across identical payloads (see test_identical_payloads_get_distinct_handles).
         seed = json.dumps({"capability": capability, "output": output, "n": len(self._raw)}, sort_keys=True, default=str)
         handle = "frame-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
         self._raw[handle] = output
