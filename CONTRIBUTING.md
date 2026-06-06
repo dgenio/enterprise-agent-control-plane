@@ -26,6 +26,17 @@ make test    # run the unit test suite
 - `make test` runs `python -m unittest discover -s tests -p "test_*.py"`. All
   tests are offline and deterministic; add new tests with the same `unittest`
   style as the existing files under `tests/`.
+- `make docs-health` runs `scripts/check_docs_health.py`: it fails on any broken
+  internal Markdown link in `README.md`/`docs/`, and on any drift between the
+  canonical description in [`METADATA.md`](METADATA.md) and `README.md`,
+  `pyproject.toml`, and `CITATION.cff`. The `docs-health` CI workflow runs the
+  same check on every push and pull request. Reuse the canonical description and
+  the [glossary](docs/glossary.md) vocabulary verbatim so the check stays green.
+
+## Code of Conduct
+
+By participating you agree to abide by our
+[Code of Conduct](CODE_OF_CONDUCT.md) (Contributor Covenant 2.1).
 
 ## Conventions
 
