@@ -69,6 +69,43 @@ class TestVibeGuardGate(unittest.TestCase):
             f"expected a hidden-write finding, got: {findings}",
         )
 
+    def test_removing_a_write_capability_from_a_multiline_set_is_flagged(self):
+        # The set may be reformatted to one capability per line; a removal must still be
+        # caught even though the dropped literal is not on the WRITE_OR_DESTRUCTIVE line.
+        diff = (
+            "@@ -12,5 +12,4 @@\n"
+            "-WRITE_OR_DESTRUCTIVE = {\n"
+            '-    "billing.issue_refund",\n'
+            '-    "email.send_reply",\n'
+            '-    "support.create_task",\n'
+            "-}\n"
+            "+WRITE_OR_DESTRUCTIVE = {\n"
+            '+    "email.send_reply",\n'
+            '+    "support.create_task",\n'
+            "+}\n"
+        )
+        findings = scan_diff(diff)
+        self.assertTrue(
+            any('"billing.issue_refund"' in f and "WRITE_OR_DESTRUCTIVE" in f for f in findings),
+            f"expected a hidden-write finding for the multi-line set, got: {findings}",
+        )
+
+    def test_raising_refund_auto_limit_is_flagged(self):
+        # The docstring/docs advertise raising REFUND_AUTO_LIMIT as a detected class; lock
+        # it in. This exercises the "limit" branch of _MONEY_CONTEXT, distinct from the
+        # "amount" fallback covered above.
+        diff = (
+            "+++ b/enterprise_agent_control_plane/policies.py\n"
+            "@@ -34,1 +34,1 @@\n"
+            "-REFUND_AUTO_LIMIT = 50.0\n"
+            "+REFUND_AUTO_LIMIT = 5000.0\n"
+        )
+        findings = scan_diff(diff)
+        self.assertTrue(
+            any("REFUND_AUTO_LIMIT" in f and "5000" in f for f in findings),
+            f"expected a widened-bound finding for REFUND_AUTO_LIMIT, got: {findings}",
+        )
+
     def test_introducing_a_network_call_is_flagged(self):
         diff = (
             "@@ -1,0 +1,1 @@\n"

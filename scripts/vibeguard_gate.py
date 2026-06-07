@@ -90,6 +90,11 @@ def _file_hunks(diff_text: str) -> list[tuple[str | None, list[str]]]:
     location. Anything before the first hunk header -- the fixture's freeform comment
     banner, the ``diff --git`` / ``---`` lines -- is ignored, so only real changed lines
     are scanned.
+
+    Note: a *content* line that itself begins with ``+++ `` or ``--- `` (e.g. a diff that
+    adds the literal text ``++ x``) is parsed as a header. This is an accepted limitation
+    of the line-prefix heuristic -- it is a reference-architecture gate, not a hardened
+    parser -- and standard ``git diff`` output for this repo's source does not produce it.
     """
     pairs: list[tuple[str | None, list[str]]] = []
     current_file: str | None = None
@@ -135,9 +140,13 @@ def scan_diff(diff_text: str) -> list[str]:
                 )
 
         # Class 2 -- a capability removed from the WRITE_OR_DESTRUCTIVE set (hides a write).
-        if any(_WRITE_SET in b for b in removed) or any(_WRITE_SET in b for b in added):
-            removed_caps = {c for b in removed if _WRITE_SET in b for c in _CAPABILITY.findall(b)}
-            added_caps = {c for b in added if _WRITE_SET in b for c in _CAPABILITY.findall(b)}
+        # The set may be formatted across several lines (one capability per line), so once
+        # the set name appears anywhere in the hunk, collect capability literals from the
+        # whole hunk rather than only the line that carries the name -- otherwise a reformat
+        # to multi-line would silently defeat the check.
+        if any(_WRITE_SET in b for b in removed + added):
+            removed_caps = {c for b in removed for c in _CAPABILITY.findall(b)}
+            added_caps = {c for b in added for c in _CAPABILITY.findall(b)}
             for cap in sorted(removed_caps - added_caps):
                 findings.append(
                     f"capability {cap} removed from {_WRITE_SET} -- a write would no longer be gated"
