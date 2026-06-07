@@ -30,7 +30,7 @@ the [threat model](threat-model.md); for how each decision is made see the
 | Audit-light, un-investigable logs | Structured, per-step, tamper-evident trace | agent-kernel (audit) | [`audit.py`](../enterprise_agent_control_plane/audit.py) (`AuditTrace`, `AuditEvent`) | Implemented |
 | Unevaluated routing/policy changes | Offline evaluation gate before merge | skdr-eval | [`evals.py`](../enterprise_agent_control_plane/evals.py), [`evals/`](../evals/) | Implemented (local stand-in) |
 | Lost operator corrections | Reviewed lesson becomes a durable guardrail | lessonweaver | [`lessons.py`](../enterprise_agent_control_plane/lessons.py) (`LessonWeaverStub`) | Partial (staging; review-to-behavior loop planned, issue #68) |
-| Unsafe AI-generated changes merged unflagged | Pre-merge diff safety gate | VibeGuard | [`.github/workflows/vibeguard.yml`](../.github/workflows/vibeguard.yml) | Planned (placeholder, issues #10/#91) |
+| Unsafe AI-generated changes merged unflagged | Pre-merge diff safety gate | VibeGuard | [`scripts/vibeguard_gate.py`](../scripts/vibeguard_gate.py), [`.github/workflows/vibeguard.yml`](../.github/workflows/vibeguard.yml), [`docs/vibeguard.md`](vibeguard.md) | Implemented (local stand-in) |
 
 ## How to read the status column
 

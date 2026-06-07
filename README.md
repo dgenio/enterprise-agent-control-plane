@@ -118,7 +118,7 @@ Run just the baseline with `make baseline`: it refreshes the audit-light
 session's aggregate side effects.
 
 Illustrative, inert fixtures live under [`demos/`](demos/) (a risky AI-generated change
-no pre-merge gate would catch). The baseline "before" is written up in
+that the [VibeGuard gate](docs/vibeguard.md) catches). The baseline "before" is written up in
 [`docs/lesson-capture-gap.md`](docs/lesson-capture-gap.md),
 [`docs/baseline-model-fidelity.md`](docs/baseline-model-fidelity.md) (why the gaps are
 architectural, not a strawman), and
@@ -177,7 +177,7 @@ short-lived), and a reviewed-lesson loop where a human-reviewed correction chang
 - `AgentFence`: local allow/deny/ask policy gate in `policies.py`
 - `skdr-eval`: offline comparison stub in `evals.py` + `evals/`
 - `lessonweaver`: reviewed lesson staging stub in `lessons.py`
-- `VibeGuard`: CI workflow placeholder in `.github/workflows/vibeguard.yml`
+- `VibeGuard`: pre-merge diff safety gate in [`scripts/vibeguard_gate.py`](scripts/vibeguard_gate.py), run by [`.github/workflows/vibeguard.yml`](.github/workflows/vibeguard.yml) — see [the VibeGuard gate doc](docs/vibeguard.md)
 
 ## Implemented now vs planned
 

@@ -28,6 +28,8 @@ documentation; start here, then follow the links below.
 - [Threat model](threat-model.md) — the baseline risks each control addresses.
 - [Control traceability matrix](control-traceability.md) — each baseline risk
   mapped to the governed control, the dgenio library, and the code.
+- [VibeGuard gate](vibeguard.md) — the pre-merge diff safety gate that flags
+  AI-generated changes which quietly weaken the agent's safety posture.
 - [Evaluation methodology](evaluation-methodology.md) — offline scoring of
   candidate routers and policies.
 
