@@ -177,7 +177,7 @@ short-lived), and a reviewed-lesson loop where a human-reviewed correction chang
 - `AgentFence`: local allow/deny/ask policy gate in `policies.py`
 - `skdr-eval`: offline comparison stub in `evals.py` + `evals/`
 - `lessonweaver`: reviewed lesson staging stub in `lessons.py`
-- `VibeGuard`: pre-merge diff safety gate in [`scripts/vibeguard_gate.py`](scripts/vibeguard_gate.py), run by [`.github/workflows/vibeguard.yml`](.github/workflows/vibeguard.yml) — see [the VibeGuard gate doc](docs/vibeguard.md)
+- `VibeGuard`: official [`vibeguard-gate`](https://pypi.org/project/vibeguard-gate/) artifact-hygiene gate plus a domain gate ([`scripts/vibeguard_gate.py`](scripts/vibeguard_gate.py)) for repo-specific regressions, both run by [`.github/workflows/vibeguard.yml`](.github/workflows/vibeguard.yml) — see [the VibeGuard gate doc](docs/vibeguard.md)
 
 ## Implemented now vs planned
 

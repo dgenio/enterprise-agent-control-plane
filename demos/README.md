@@ -22,13 +22,15 @@ money. The diff is **illustrative only** and is never applied.
 
 ### What the VibeGuard gate adds
 
-The pre-merge gate ([`scripts/vibeguard_gate.py`](../scripts/vibeguard_gate.py), run by
-`.github/workflows/vibeguard.yml`; issues #10/#91/#125) inspects the diff and flags edits
-in this class — for example, a diff that:
+CI runs two complementary layers (issues #10/#91/#125; see [`docs/vibeguard.md`](../docs/vibeguard.md)):
 
-- widens a hardcoded money-movement amount or fallback bound (this fixture),
-- removes a capability from the baseline's `WRITE_OR_DESTRUCTIVE` set (hiding a write), or
-- introduces an unexpected outbound call.
+- the **official VibeGuard** (`vibeguard-gate`) for artifact hygiene — secrets, risky SQL,
+  packaging / supply-chain drift, AI footprints; and
+- a **domain gate** ([`scripts/vibeguard_gate.py`](../scripts/vibeguard_gate.py)) for the
+  repo-specific regressions the generic tool does not model — a diff that widens a
+  hardcoded money-movement amount or fallback bound (**this fixture**), removes a capability
+  from the baseline's `WRITE_OR_DESTRUCTIVE` set (hiding a write), or introduces an
+  unexpected outbound call.
 
-Run `make vibeguard` to see the gate flag this fixture. See [`docs/vibeguard.md`](../docs/vibeguard.md)
-for details. This is a stand-in for the official VibeGuard action, not production protection.
+Run `make vibeguard-domain` to watch the domain gate flag this fixture. These are
+reference-architecture controls, not production protection.
