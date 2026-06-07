@@ -1,0 +1,12 @@
+[
+  {
+    "failure_id": "F-refund-autoapprove",
+    "summary": "operator correction: small refunds auto-approved should require human review",
+    "reviewed": true,
+    "proposed_change": {
+      "field": "refund_auto_limit",
+      "new_value": 25.0,
+      "rationale": "auto-approve limit set too high"
+    }
+  }
+]

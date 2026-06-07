@@ -1,6 +1,8 @@
+import json
+from pathlib import Path
 from typing import Any
 
-from enterprise_agent_control_plane import fake_tools
+from enterprise_agent_control_plane import comparison, fake_tools
 from enterprise_agent_control_plane.baseline_agent import BaselineAgent
 from enterprise_agent_control_plane.baseline_router import (
     route_greedy,
@@ -11,12 +13,9 @@ from enterprise_agent_control_plane.baseline_router import (
 )
 from enterprise_agent_control_plane.baseline_runner import aggregate_session_side_effects
 from enterprise_agent_control_plane.governed_agent import GovernedAgent
+from enterprise_agent_control_plane.lessons import LessonWeaverStub, PolicyChange
+from enterprise_agent_control_plane.policies import AgentFencePolicy, issue_tokens
 from enterprise_agent_control_plane.scenarios import WORKLOAD
-
-
-def _leaked_field_count(result: dict[str, Any]) -> int:
-    """Total raw, task-irrelevant fields the baseline forwarded into model context."""
-    return sum(len(extra) for extra in result["leaked_fields"].values())
 
 
 def print_workload(customer_id: str, invoice_id: str) -> dict[str, Any]:
@@ -253,30 +252,24 @@ def print_no_aggregate_budget() -> None:
     )
 
 
-def print_contrast(baseline: dict[str, Any], governed: dict[str, Any]) -> None:
-    """Side-by-side baseline-vs-governed scorecard on shared dimensions (#8)."""
+def print_contrast() -> None:
+    """Generated side-by-side scorecard, saved as a reusable artifact (issues #8, #43).
+
+    The numbers are computed by running the same refund case through both paths, so the table
+    and the saved artifact stay in sync and nothing is hand-written.
+    """
     print("\n[3] Side-by-side contrast (same refund case, both paths)")
-    rows = [
-        ("tools exposed to the model", baseline["tools_offered_each_step"], len(governed["visible_tools"])),
-        ("raw sensitive fields in model context", _leaked_field_count(baseline), 0),
-        ("ungated write/destructive actions", len(baseline["policy_blind_writes"]), 0),
-        (
-            "policy decisions recorded",
-            0,
-            1 if governed["decision"] is not None else 0,
-        ),
-        (
-            "structured audit trace",
-            "none" if baseline["structured_audit_trace"] is None else "yes",
-            "yes",
-        ),
-    ]
-    width = max(len(label) for label, _, _ in rows)
+    scorecard = comparison.build_scorecard()
+    rows = scorecard["dimensions"]
+    width = max(len(row["dimension"]) for row in rows)
     print(f"  {'dimension'.ljust(width)} | {'baseline':>10} | {'governed':>10}")
     print(f"  {'-' * width} | {'-' * 10} | {'-' * 10}")
-    for label, base_val, gov_val in rows:
-        print(f"  {label.ljust(width)} | {str(base_val):>10} | {str(gov_val):>10}")
-    print(f"  gated action: {governed['bounded_output']['gated_capability']} -> {governed['bounded_output']['action_status']}")
+    for row in rows:
+        print(f"  {row['dimension'].ljust(width)} | {str(row['baseline']):>10} | {str(row['governed']):>10}")
+    gated = scorecard["gated_action"]
+    print(f"  gated action: {gated['capability']} -> {gated['outcome']}")
+    paths = comparison.save_scorecard(scorecard)
+    print(f"  scorecard artifact: {paths['json']} + {paths['markdown']} (numbers derived from the runs)")
 
 
 def main() -> None:
@@ -351,8 +344,12 @@ def main() -> None:
     print(f"  no approver       -> {governed['bounded_output']['action_status']}")
 
     print_execution_contract(customer_id, invoice_id)
+    print_governed_workload()
+    print_role_matrix()
+    print_jit_tokens(customer_id, invoice_id)
+    print_lesson_loop(customer_id, invoice_id)
 
-    print_contrast(baseline, governed)
+    print_contrast()
     print_eval_lane()
 
 
@@ -414,6 +411,124 @@ def print_frame_expansion(agent: GovernedAgent, governed: dict[str, Any]) -> Non
     print(
         f"  support_manager expand -> {allowed['outcome']}: revealed {allowed['revealed_fields']} "
         "(who/what/when recorded in the audit trace)"
+    )
+
+
+def print_governed_workload() -> None:
+    """The governed path over the same multi-case workload as the baseline (#107).
+
+    The baseline already runs the realistic five-case workload; running the governed path over
+    the same cases makes the before/after contrast case-for-case instead of five-vs-one.
+    """
+    print("\n[2f] Governed path over the full multi-case workload (per-case contrast)")
+    for scenario in WORKLOAD:
+        fake_tools.reset_state()
+        result = GovernedAgent().run_case(
+            scenario.request, scenario.customer_id, scenario.invoice_id, principal="support_agent"
+        )
+        bounded = result["bounded_output"]
+        flow = result["flow"] or "(no matching flow)"
+        gated = bounded["gated_capability"] or "-"
+        print(
+            f"  case {scenario.name!r}: {scenario.request!r} -> flow={flow}, "
+            f"status={bounded['status']}, gated={gated} -> {bounded['action_status']}"
+        )
+    print(
+        "  contrast: the baseline ran all five; the governed path now does too -- holding or "
+        "halting every risky write rather than executing it."
+    )
+
+
+def print_role_matrix() -> None:
+    """Same capability, different decision per principal -- exercises billing_admin (#108)."""
+    print("\n[2g] Role-differentiated decisions across principals")
+    fake_tools.reset_state()
+    agent = GovernedAgent()
+    principals = ("support_agent", "support_manager", "billing_admin")
+    capabilities: list[tuple[str, dict[str, Any] | None]] = [
+        ("frame.expand", None),
+        ("support.create_task", None),
+        ("audit.export_case", None),
+        ("billing.issue_refund", {"amount": 40.0}),
+    ]
+    width = max(len(cap) for cap, _ in capabilities)
+    header = "  " + "capability".ljust(width) + " | " + " | ".join(p.center(17) for p in principals)
+    print(header)
+    print("  " + "-" * (len(header) - 2))
+    for cap, args in capabilities:
+        cells = [agent.decide(cap, principal, args).outcome.center(17) for principal in principals]
+        print("  " + cap.ljust(width) + " | " + " | ".join(cells))
+    print(
+        "  billing_admin (previously never exercised) now produces distinct decisions: it may "
+        "reveal frames and refund, but cannot create tasks or export cases."
+    )
+
+
+def print_jit_tokens(customer_id: str, invoice_id: str) -> None:
+    """Just-in-time, case-scoped capability tokens vs a standing role grant (#63)."""
+    print("\n[2h] Just-in-time, case-scoped capability tokens")
+    fake_tools.reset_state()
+    governed = GovernedAgent().run_case("refund request", customer_id, invoice_id, principal="support_agent")
+    shortlist = next(e for e in governed["trace"].as_dict()["events"] if e["action"] == "shortlist")
+    details = shortlist["details"]
+    standing = sorted(token.capability for token in issue_tokens("support_agent"))
+    case_caps = details["case_tokens"]
+    not_minted = sorted(set(standing) - set(case_caps))
+    print(f"  standing role grant ({len(standing)} caps, no expiry): {standing}")
+    print(
+        f"  case-scoped grant ({len(case_caps)} caps, scope={details['case_token_scope']!r}, "
+        f"ttl={details['case_token_ttl_seconds']}s): {case_caps}"
+    )
+    print(f"  role-granted but NOT minted for this case (least privilege): {not_minted}")
+
+
+def print_lesson_loop(customer_id: str, invoice_id: str) -> None:
+    """Reviewed-lesson loop: a reviewed correction changes a candidate policy while unreviewed
+    lessons stay inert (#6, #68)."""
+    print("\n[2i] Reviewed-lesson loop (a human-reviewed lesson changes a candidate policy)")
+    lessons_dir = Path("lessons")
+    lessons_dir.mkdir(exist_ok=True)
+
+    # A concrete failed/fail-closed trace as the lesson's evidence (#6): the governed path
+    # halts on a not-found invoice. Capture that trace as the sample failure artifact.
+    fake_tools.reset_state()
+    halted = GovernedAgent().run_case("refund request", "C-404", "INV-404", principal="support_agent")
+    failed_trace_path = lessons_dir / "failed_trace.json"
+    failed_trace_path.write_text(json.dumps(halted["trace"].as_dict(), indent=2), encoding="utf-8")
+    print(f"  sample failed trace captured: {failed_trace_path} (status={halted['bounded_output']['status']})")
+
+    # Stage a candidate lesson from a recurring operator correction (the baseline's lost
+    # correction, #34): small refunds were auto-approved that should have required review.
+    weaver = LessonWeaverStub()
+    weaver.add_failure(
+        "F-refund-autoapprove",
+        "operator correction: small refunds auto-approved should require human review",
+        proposed_change=PolicyChange("refund_auto_limit", 25.0, "auto-approve limit set too high"),
+    )
+
+    base = AgentFencePolicy()
+    probe = {"amount": 40.0}
+    # Unreviewed: the candidate policy equals the base, so a $40 refund is still auto-allowed.
+    unreviewed = weaver.candidate_policy(base)
+    print(
+        f"  unreviewed lesson: auto-limit stays {unreviewed.refund_auto_limit} -> $40 refund "
+        f"decision={unreviewed.evaluate('billing.issue_refund', 'support_agent', probe).decision} (inert)"
+    )
+    # Reviewed: the candidate policy tightens, so the same $40 refund now requires approval.
+    weaver.mark_reviewed("F-refund-autoapprove")
+    reviewed = weaver.candidate_policy(base)
+    print(
+        f"  reviewed lesson:   auto-limit -> {reviewed.refund_auto_limit} -> $40 refund "
+        f"decision={reviewed.evaluate('billing.issue_refund', 'support_agent', probe).decision} (candidate change)"
+    )
+    lesson_path = lessons_dir / "reviewed_lesson.json"
+    lesson_path.write_text(
+        json.dumps([lesson.as_dict() for lesson in weaver.reviewed_lessons()], indent=2),
+        encoding="utf-8",
+    )
+    print(
+        f"  reviewed-lesson artifact: {lesson_path}; the base policy is never mutated "
+        f"(still {base.refund_auto_limit})."
     )
 
 

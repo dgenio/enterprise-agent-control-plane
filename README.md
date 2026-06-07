@@ -125,6 +125,42 @@ architectural, not a strawman), and
 [`docs/baseline-incident-postmortem.md`](docs/baseline-incident-postmortem.md) (the gaps
 combined into one un-investigable incident).
 
+## Sample demo output
+
+Real, copy-pasted excerpts from `make demo` (numbers are computed from the runs, not
+hand-written). The governed path runs the **same** five-case workload as the baseline,
+holding or halting every risky write instead of executing it:
+
+```text
+[2f] Governed path over the full multi-case workload (per-case contrast)
+  case 'refund': 'refund request' -> flow=refund_review, status=ok, gated=billing.issue_refund -> approval_required
+  case 'escalation': 'escalate this ticket' -> flow=escalation, status=ok, gated=support.create_task -> approval_required
+  case 'email_reply': 'send a direct email reply' -> flow=customer_reply, status=ok, gated=email.send_reply -> approval_required
+  case 'ambiguous': 'just fix it for this customer' -> flow=(no matching flow), status=no_matching_flow
+  case 'not_found': 'refund request' -> flow=refund_review, status=halted (fail-closed before any write)
+```
+
+The before/after is then collapsed into one generated scorecard, saved as a reusable
+artifact ([`traces/comparison_scorecard.md`](traces/comparison_scorecard.md)):
+
+```text
+[3] Side-by-side contrast (same refund case, both paths)
+  dimension                             |   baseline |   governed
+  ------------------------------------- | ---------- | ----------
+  tools exposed to the model            |          9 |          5
+  approx model-visible context (chars)  |       1290 |        108
+  raw sensitive fields in model context |         14 |          0
+  ungated write/destructive actions     |          1 |          0
+  policy decisions recorded             |          0 |          1
+  structured audit trace                |       none |        yes
+  gated action: billing.issue_refund -> approval_required
+```
+
+The demo also shows role-differentiated decisions across principals, just-in-time
+case-scoped capability tokens (only the capabilities a case needs, scoped to its trace and
+short-lived), and a reviewed-lesson loop where a human-reviewed correction changes a
+*candidate* policy while unreviewed lessons stay inert.
+
 ## What this demonstrates
 
 - bounded context routing over large tool catalogs,

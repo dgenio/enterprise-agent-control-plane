@@ -1,0 +1,51 @@
+{
+  "case": {
+    "request": "refund request",
+    "customer_id": "C-100",
+    "invoice_id": "INV-9"
+  },
+  "source": "live baseline and governed runs (numbers derived, not hardcoded)",
+  "gated_action": {
+    "capability": "billing.issue_refund",
+    "outcome": "approval_required"
+  },
+  "dimensions": [
+    {
+      "dimension": "tools exposed to the model",
+      "baseline": 9,
+      "governed": 5,
+      "governed_better": true
+    },
+    {
+      "dimension": "approx model-visible context (chars)",
+      "baseline": 1290,
+      "governed": 108,
+      "governed_better": true
+    },
+    {
+      "dimension": "raw sensitive fields in model context",
+      "baseline": 14,
+      "governed": 0,
+      "governed_better": true
+    },
+    {
+      "dimension": "ungated write/destructive actions",
+      "baseline": 1,
+      "governed": 0,
+      "governed_better": true
+    },
+    {
+      "dimension": "policy decisions recorded",
+      "baseline": 0,
+      "governed": 1,
+      "governed_better": true
+    },
+    {
+      "dimension": "structured audit trace",
+      "baseline": "none",
+      "governed": "yes",
+      "governed_better": true
+    }
+  ],
+  "note": "Reference comparison only -- not a security benchmark or a production guarantee."
+}

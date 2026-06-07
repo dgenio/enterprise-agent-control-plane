@@ -2,7 +2,7 @@ import hashlib
 import json
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 
 from .audit import AuditTrace
 from .catalog import build_catalog, build_tool_definitions, context_reduction, shortlist_capabilities
@@ -11,9 +11,12 @@ from . import fake_tools
 from .flows import ChainWeaverExecutor, FLOW_REGISTRY, select_flow
 from .policies import (
     ACTION_CLASSES,
+    CASE_TOKEN_TTL_SECONDS,
     AgentFencePolicy,
+    CapabilityToken,
     PolicyDecision,
     holds_capability,
+    issue_case_tokens,
     issue_tokens,
     may_approve,
 )
@@ -86,9 +89,17 @@ class GovernedAgent:
         trace: Optional[AuditTrace] = None,
         approver: Any = _USE_DEFAULT,
         approver_principal: Any = _USE_DEFAULT,
+        tokens: Optional[Iterable[CapabilityToken]] = None,
+        scope: Optional[str] = None,
     ) -> GovernedDecision:
         """Gate one capability: token check (issue #23) -> policy (issues #2/#36) ->
         approval routing for 'ask' (issue #5/#64). Records an explainable trace event (#27).
+
+        ``tokens`` lets a caller supply the case-scoped tokens minted for the current run
+        (issue #63); when ``None`` the principal's standing role tokens are used, so a direct
+        ``decide`` call still works outside a case. ``scope`` (the case/trace id) binds the
+        token check to a single case so a case-scoped token cannot be replayed in another
+        context (issue #63); ``None`` skips the scope check for standalone/standing-grant calls.
         """
         args = args or {}
         approver = self.approver if approver is _USE_DEFAULT else approver
@@ -97,9 +108,10 @@ class GovernedAgent:
         )
 
         # Token layer first: an out-of-scope capability for a principal is rejected
-        # before any policy evaluation (issue #23).
-        tokens = issue_tokens(principal)
-        if not holds_capability(tokens, capability):
+        # before any policy evaluation (issue #23). The token set is either the case-scoped
+        # grant minted for this run (issue #63) or the standing role grant when called alone.
+        tokens = list(tokens) if tokens is not None else issue_tokens(principal)
+        if not holds_capability(tokens, capability, scope=scope):
             decision = GovernedDecision(
                 capability, principal, ACTION_CLASSES.get(capability), "deny", "denied",
                 f"{principal} holds no valid capability token for {capability}.", False,
@@ -249,7 +261,7 @@ class GovernedAgent:
                 "gated_actions": [],
             }
             trace.record(principal, "output.frame", "no_match", frame)
-            path = self._save_trace(trace, customer_id, invoice_id)
+            path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": None,
                 "visible_tools": [], "decision": None, "decisions": [], "bounded_output": frame,
@@ -280,11 +292,24 @@ class GovernedAgent:
             budget = set(capability_budget) | set(flow.gated_capabilities)
         visible_tools = sorted(budget)
 
+        # Just-in-time, case-scoped capability tokens (issue #63): mint only the tokens this
+        # case's flow steps plus its gated action need, scoped to this trace and short-lived,
+        # rather than the principal's full standing role grant. The role still bounds what can
+        # be minted (least privilege twice), so a capability the role grants but this case did
+        # not request is never issued for the run.
+        needed_caps = flow_caps | set(flow.gated_capabilities)
+        case_tokens = issue_case_tokens(principal, needed_caps, scope=trace.trace_id)
+
         trace.record(principal, "shortlist", "ok", {
             "capabilities": [c.capability for c in shortlist],
             "reason": f"keyword shortlist for intent {intent!r}; full catalog kept out of model context",
             "budget": sorted(budget),
             "context_metric": context_metric,
+            # Case-scoped token provenance (issue #63): which capabilities were granted just
+            # for this case, the scope they are bound to, and their TTL.
+            "case_tokens": [t.capability for t in case_tokens],
+            "case_token_scope": trace.trace_id,
+            "case_token_ttl_seconds": CASE_TOKEN_TTL_SECONDS,
         })
 
         trace.record(principal, "flow.select", "ok",
@@ -293,8 +318,9 @@ class GovernedAgent:
 
         # Each flow step is token-checked and recorded as its own audit event so the trace
         # explains the run step-by-step, and read steps are subject to the same
-        # least-privilege token check as the gated write (issue #111).
-        tokens = issue_tokens(principal)
+        # least-privilege token check as the gated write (issue #111). The check uses the
+        # case-scoped tokens minted above (issue #63), not the standing role grant.
+        tokens = case_tokens
 
         def _on_step(record: dict[str, Any]) -> None:
             outcome = {"ok": "ok", "blocked_no_token": "blocked_no_token"}.get(record["status"], record["status"])
@@ -309,7 +335,7 @@ class GovernedAgent:
         flow_results = self.executor.run(
             flow_id,
             payload,
-            token_check=lambda cap: holds_capability(tokens, cap),
+            token_check=lambda cap: holds_capability(tokens, cap, scope=trace.trace_id),
             on_step=_on_step,
             budget=budget,
         )
@@ -350,7 +376,7 @@ class GovernedAgent:
                 "gated_actions": [],
             }
             trace.record(principal, "output.frame", "halted", frame)
-            path = self._save_trace(trace, customer_id, invoice_id)
+            path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
                 "visible_tools": visible_tools, "decision": None, "decisions": [],
@@ -369,6 +395,7 @@ class GovernedAgent:
             decision = self.decide(
                 capability, principal, gate_args, trace=trace,
                 approver=approver, approver_principal=approver_principal,
+                tokens=case_tokens, scope=trace.trace_id,
             )
             commit_mode = self._settle_write(capability, decision, trace, principal, payload, flow_results)
             decisions.append(decision)
@@ -397,7 +424,7 @@ class GovernedAgent:
         }
         trace.record(principal, "output.frame", "ok", frame)
 
-        path = self._save_trace(trace, customer_id, invoice_id)
+        path = self._save_trace(trace, customer_id, invoice_id, intent)
         return {
             "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
             "visible_tools": visible_tools,
@@ -603,7 +630,12 @@ class GovernedAgent:
         return {"handle": handle, "outcome": decision.outcome, "revealed": raw,
                 "revealed_fields": revealed_fields, "decision": decision.as_dict()}
 
-    def _save_trace(self, trace: AuditTrace, customer_id: str, invoice_id: str) -> Path:
-        path = Path("traces") / f"governed_run_{customer_id}_{invoice_id}.json"
+    def _save_trace(
+        self, trace: AuditTrace, customer_id: str, invoice_id: str, intent: str
+    ) -> Path:
+        # Include the resolved intent so cases that share a customer/invoice id (e.g. the
+        # shared-id WORKLOAD scenarios run by the demo) each write a distinct trace file
+        # instead of overwriting governed_run_{customer}_{invoice}.json on every run.
+        path = Path("traces") / f"governed_run_{customer_id}_{invoice_id}_{intent}.json"
         trace.save(path)
         return path
