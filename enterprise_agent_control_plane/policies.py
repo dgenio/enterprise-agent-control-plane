@@ -160,8 +160,15 @@ class CapabilityToken:
     issuer: str = "control-plane"
     expires: Optional[datetime] = None
 
-    def is_valid(self, capability: str, now: Optional[datetime] = None) -> bool:
+    def is_valid(
+        self, capability: str, now: Optional[datetime] = None, scope: Optional[str] = None
+    ) -> bool:
         if self.capability != capability:
+            return False
+        # When a scope is supplied, the token must have been minted for it (the case/trace id),
+        # so a case-scoped token (issue #63) cannot be replayed in another context. ``scope=None``
+        # skips the check, so non-expiring standing grants (issue #23) still validate.
+        if scope is not None and self.scope != scope:
             return False
         if self.expires is None:
             return True
@@ -272,6 +279,13 @@ def holds_capability(
     tokens: Iterable[CapabilityToken],
     capability: str,
     now: Optional[datetime] = None,
+    scope: Optional[str] = None,
 ) -> bool:
-    """True if the principal holds a valid, unexpired token for the capability."""
-    return any(token.is_valid(capability, now) for token in tokens)
+    """True if the principal holds a valid, unexpired token for the capability.
+
+    When ``scope`` is given, a matching token must also have been minted for that scope (the
+    case/trace id), so a case-scoped token (issue #63) cannot be replayed outside the case it
+    was issued for. ``scope=None`` skips the scope check, so standing role grants (issue #23)
+    still validate when used outside a case.
+    """
+    return any(token.is_valid(capability, now, scope) for token in tokens)

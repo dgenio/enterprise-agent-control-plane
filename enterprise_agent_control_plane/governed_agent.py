@@ -90,13 +90,16 @@ class GovernedAgent:
         approver: Any = _USE_DEFAULT,
         approver_principal: Any = _USE_DEFAULT,
         tokens: Optional[Iterable[CapabilityToken]] = None,
+        scope: Optional[str] = None,
     ) -> GovernedDecision:
         """Gate one capability: token check (issue #23) -> policy (issues #2/#36) ->
         approval routing for 'ask' (issue #5/#64). Records an explainable trace event (#27).
 
         ``tokens`` lets a caller supply the case-scoped tokens minted for the current run
         (issue #63); when ``None`` the principal's standing role tokens are used, so a direct
-        ``decide`` call still works outside a case.
+        ``decide`` call still works outside a case. ``scope`` (the case/trace id) binds the
+        token check to a single case so a case-scoped token cannot be replayed in another
+        context (issue #63); ``None`` skips the scope check for standalone/standing-grant calls.
         """
         args = args or {}
         approver = self.approver if approver is _USE_DEFAULT else approver
@@ -108,7 +111,7 @@ class GovernedAgent:
         # before any policy evaluation (issue #23). The token set is either the case-scoped
         # grant minted for this run (issue #63) or the standing role grant when called alone.
         tokens = list(tokens) if tokens is not None else issue_tokens(principal)
-        if not holds_capability(tokens, capability):
+        if not holds_capability(tokens, capability, scope=scope):
             decision = GovernedDecision(
                 capability, principal, ACTION_CLASSES.get(capability), "deny", "denied",
                 f"{principal} holds no valid capability token for {capability}.", False,
@@ -258,7 +261,7 @@ class GovernedAgent:
                 "gated_actions": [],
             }
             trace.record(principal, "output.frame", "no_match", frame)
-            path = self._save_trace(trace, customer_id, invoice_id)
+            path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": None,
                 "visible_tools": [], "decision": None, "decisions": [], "bounded_output": frame,
@@ -332,7 +335,7 @@ class GovernedAgent:
         flow_results = self.executor.run(
             flow_id,
             payload,
-            token_check=lambda cap: holds_capability(tokens, cap),
+            token_check=lambda cap: holds_capability(tokens, cap, scope=trace.trace_id),
             on_step=_on_step,
             budget=budget,
         )
@@ -373,7 +376,7 @@ class GovernedAgent:
                 "gated_actions": [],
             }
             trace.record(principal, "output.frame", "halted", frame)
-            path = self._save_trace(trace, customer_id, invoice_id)
+            path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
                 "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
                 "visible_tools": visible_tools, "decision": None, "decisions": [],
@@ -392,7 +395,7 @@ class GovernedAgent:
             decision = self.decide(
                 capability, principal, gate_args, trace=trace,
                 approver=approver, approver_principal=approver_principal,
-                tokens=case_tokens,
+                tokens=case_tokens, scope=trace.trace_id,
             )
             commit_mode = self._settle_write(capability, decision, trace, principal, payload, flow_results)
             decisions.append(decision)
@@ -421,7 +424,7 @@ class GovernedAgent:
         }
         trace.record(principal, "output.frame", "ok", frame)
 
-        path = self._save_trace(trace, customer_id, invoice_id)
+        path = self._save_trace(trace, customer_id, invoice_id, intent)
         return {
             "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
             "visible_tools": visible_tools,
@@ -627,7 +630,12 @@ class GovernedAgent:
         return {"handle": handle, "outcome": decision.outcome, "revealed": raw,
                 "revealed_fields": revealed_fields, "decision": decision.as_dict()}
 
-    def _save_trace(self, trace: AuditTrace, customer_id: str, invoice_id: str) -> Path:
-        path = Path("traces") / f"governed_run_{customer_id}_{invoice_id}.json"
+    def _save_trace(
+        self, trace: AuditTrace, customer_id: str, invoice_id: str, intent: str
+    ) -> Path:
+        # Include the resolved intent so cases that share a customer/invoice id (e.g. the
+        # shared-id WORKLOAD scenarios run by the demo) each write a distinct trace file
+        # instead of overwriting governed_run_{customer}_{invoice}.json on every run.
+        path = Path("traces") / f"governed_run_{customer_id}_{invoice_id}_{intent}.json"
         trace.save(path)
         return path

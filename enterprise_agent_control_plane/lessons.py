@@ -93,13 +93,14 @@ class LessonWeaverStub:
         return [x for x in self._candidates if x.reviewed]
 
     def candidate_policy(self, base: AgentFencePolicy) -> AgentFencePolicy:
-        """Apply *reviewed* lessons' proposed changes to ``base``, returning a new policy (#68).
+        """Apply *reviewed* lessons' proposed changes to ``base`` (#68).
 
-        Only reviewed candidates with a proposed change take effect; an unreviewed candidate
-        is inert and the returned policy equals ``base``. When several reviewed lessons touch
-        the same threshold, the later one wins (last review applied). The base policy is never
-        mutated -- a fresh :class:`AgentFencePolicy` is returned so the change is a *candidate*
-        the caller can compare against the current policy.
+        Only reviewed candidates with a proposed change take effect; an unreviewed candidate is
+        inert. When there are no reviewed overrides the unchanged ``base`` is returned as-is;
+        otherwise a fresh :class:`AgentFencePolicy` carrying the overrides is returned. Either
+        way ``base`` is never mutated, so the result is a *candidate* the caller can compare
+        against the current policy. When several reviewed lessons override the same threshold,
+        the last one in candidate (insertion) order wins.
         """
         overrides: dict[str, float] = {}
         for lesson in self.reviewed_lessons():
