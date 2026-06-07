@@ -1,7 +1,7 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Iterable, Literal, Optional, cast
 
 from .registry import CAPABILITY_REGISTRY
@@ -223,9 +223,49 @@ def may_approve(approver_principal: str, action_class: Optional[ActionClass]) ->
 
 
 def issue_tokens(principal: str, expires: Optional[datetime] = None) -> list[CapabilityToken]:
-    """Mint the scoped capability tokens a principal's role grants (issue #23)."""
+    """Mint the *standing* capability tokens a principal's role grants (issue #23).
+
+    Every capability the role allows, on every invocation, non-expiring by default. This is
+    the "this role *could* do X" grant; :func:`issue_case_tokens` is the least-privilege,
+    just-in-time contrast (issue #63).
+    """
     grants = ROLE_GRANTS.get(principal, set())
     return [CapabilityToken(principal=principal, capability=cap, expires=expires) for cap in sorted(grants)]
+
+
+# --- Just-in-time, case-scoped token issuance (issue #63) ---------------------
+# Standing role grants say "this principal *could* do X". A case-scoped grant says "this
+# case was granted exactly the tokens its flow plus gated action need, valid for this trace,
+# and they expire afterwards." Least privilege is applied twice: the role bounds what *can*
+# be minted, and the case's needed-capability set bounds what *is* minted for this run.
+CASE_TOKEN_TTL_SECONDS = 300
+
+
+def issue_case_tokens(
+    principal: str,
+    capabilities: Iterable[str],
+    scope: str,
+    expires: Optional[datetime] = None,
+    ttl_seconds: int = CASE_TOKEN_TTL_SECONDS,
+    now: Optional[datetime] = None,
+) -> list[CapabilityToken]:
+    """Mint just-in-time, case-scoped tokens for a single run (issue #63).
+
+    Only capabilities that the case actually needs *and* the principal's role grants are
+    minted (role intersect needed), each carrying ``scope`` (the case/trace id) and a short
+    expiry so the grant does not outlive the case. A capability the role grants but the case
+    did not request is therefore never minted -- the contrast with :func:`issue_tokens`,
+    which mints every standing role grant with no expiry.
+    """
+    granted = ROLE_GRANTS.get(principal, set())
+    if expires is None:
+        now = now or datetime.now(UTC)
+        expires = now + timedelta(seconds=ttl_seconds)
+    needed = sorted(set(capabilities) & granted)
+    return [
+        CapabilityToken(principal=principal, capability=cap, scope=scope, expires=expires)
+        for cap in needed
+    ]
 
 
 def holds_capability(
