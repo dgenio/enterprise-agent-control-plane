@@ -129,7 +129,7 @@ def support_create_task(customer_id: str, note: str, commit: bool = True) -> dic
 
 
 def email_draft_reply(customer_name: str, topic: str) -> dict[str, Any]:
-    return {"subject": f"Update on your request: {topic}", "body": f"Hi {customer_name},\\nWe reviewed your request."}
+    return {"subject": f"Re: your {topic} enquiry", "body": f"Hi {customer_name},\\nWe have looked into your enquiry."}
 
 
 def email_send_reply(to: str, subject: str, body: str, commit: bool = True) -> dict[str, Any]:

@@ -7,11 +7,43 @@ permissions:
   contents: read
 
 jobs:
+  # The official VibeGuard: artifact-hygiene gate (secrets, risky SQL, packaging /
+  # supply-chain drift, AI footprints). Version-pinned and offline after install.
   vibeguard:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: VibeGuard placeholder
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install official VibeGuard
+        run: pip install vibeguard-gate==0.9.0
+      - name: Run the VibeGuard gate
+        run: vibeguard gate --fail-on high
+
+  # The domain gate: repo-specific safety regressions the generic tool does not model
+  # (a widened money/fallback bound, a capability dropped from WRITE_OR_DESTRUCTIVE, an
+  # introduced outbound call) -- the class demos/risky_ai_change.diff demonstrates.
+  domain-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Need the PR base commit so we can diff the proposed change against it.
+          fetch-depth: 0
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Self-check (the gate must flag the risky fixture)
+        # Proves the gate works before we trust its verdict on the PR diff (issue #91).
+        run: python scripts/vibeguard_gate.py --self-check
+      - name: Gate the pull request diff
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
-          echo "VibeGuard integration placeholder."
-          echo "Replace with the official public VibeGuard action once finalized."
+          git fetch --no-tags --depth=50 origin "$BASE_REF"
+          git diff "origin/$BASE_REF...HEAD" | python scripts/vibeguard_gate.py --diff -
