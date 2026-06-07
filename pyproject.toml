@@ -45,6 +45,11 @@ Repository = "https://github.com/dgenio/enterprise-agent-control-plane"
 Documentation = "https://github.com/dgenio/enterprise-agent-control-plane/blob/main/docs/README.md"
 Issues = "https://github.com/dgenio/enterprise-agent-control-plane/issues"
 
+[project.optional-dependencies]
+# Dev/CI-only tooling -- not required to run the demo or tests. `dev` installs the official
+# VibeGuard pre-merge safety gate (issues #91/#125); `pip install -e .[dev]` then `make vibeguard`.
+dev = ["vibeguard-gate==0.9.0"]
+
 [tool.setuptools]
 packages = ["enterprise_agent_control_plane"]
 

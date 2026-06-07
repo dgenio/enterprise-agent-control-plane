@@ -1,4 +1,4 @@
-.PHONY: setup demo baseline test eval docs-health vibeguard
+.PHONY: setup demo baseline test eval docs-health vibeguard vibeguard-domain
 
 setup:
 	python -m pip install -e .
@@ -19,4 +19,7 @@ docs-health:
 	python scripts/check_docs_health.py
 
 vibeguard:
+	vibeguard gate --fail-on high
+
+vibeguard-domain:
 	python scripts/vibeguard_gate.py --self-check
