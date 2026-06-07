@@ -64,6 +64,25 @@ class TestReviewedLessonChangesPolicy(unittest.TestCase):
         )
         self.assertEqual(base.refund_auto_limit, 50.0)
 
+    def test_last_override_in_insertion_order_wins_for_the_same_threshold(self):
+        # When several reviewed lessons touch the same threshold, candidate_policy applies them
+        # in candidate (insertion) order, so the last-added override is the one that takes effect.
+        base = AgentFencePolicy()
+        weaver = LessonWeaverStub()
+        weaver.add_failure(
+            "F-first", "first correction",
+            proposed_change=PolicyChange("refund_auto_limit", 30.0, "tighten to 30"),
+        )
+        weaver.add_failure(
+            "F-second", "second correction",
+            proposed_change=PolicyChange("refund_auto_limit", 10.0, "tighten further to 10"),
+        )
+        weaver.mark_reviewed("F-first")
+        weaver.mark_reviewed("F-second")
+        candidate = weaver.candidate_policy(base)
+        self.assertEqual(candidate.refund_auto_limit, 10.0)
+        self.assertEqual(base.refund_auto_limit, 50.0)
+
     def test_reviewed_lesson_without_a_proposed_change_does_not_alter_policy(self):
         base = AgentFencePolicy()
         weaver = LessonWeaverStub()

@@ -3,7 +3,10 @@
 A thin aggregation layer that runs the *same* Customer Operations case through both the
 unsafe baseline and the governed control plane and computes a side-by-side scorecard on the
 dimensions the two agents already measure -- so the before/after contrast is a reproducible
-artifact, not a hand-written claim. Every number comes from the live runs.
+artifact, not a hand-written claim. Most values are read directly from the live runs; the two
+governed counts that are zero by construction -- raw sensitive fields in context and ungated
+write/destructive actions -- are written as literal ``0`` (with an inline comment), since the
+governed path structurally cannot produce either.
 
 The scorecard is emitted by ``make demo`` and saved under ``traces/`` as both JSON (diffable)
 and Markdown (renders in the README / PRs). This is a reference comparison, not a security

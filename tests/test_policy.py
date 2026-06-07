@@ -92,6 +92,16 @@ class TestCaseScopedTokens(unittest.TestCase):
         )
         self.assertTrue(holds_capability(future, "billing.issue_refund"))
 
+    def test_scope_is_enforced_so_a_case_token_cannot_be_replayed(self):
+        # The #63 guarantee: a token minted for one case/trace must not validate in another,
+        # even while unexpired. Passing scope=None skips the check (standing-grant behavior).
+        tokens = issue_case_tokens("support_agent", {"billing.issue_refund"}, scope="trace-A")
+        # Same scope -> valid; a different scope is rejected despite the token being unexpired.
+        self.assertTrue(holds_capability(tokens, "billing.issue_refund", scope="trace-A"))
+        self.assertFalse(holds_capability(tokens, "billing.issue_refund", scope="trace-B"))
+        # No scope supplied -> the scope check is skipped, so the token still validates.
+        self.assertTrue(holds_capability(tokens, "billing.issue_refund"))
+
 
 if __name__ == "__main__":
     unittest.main()
