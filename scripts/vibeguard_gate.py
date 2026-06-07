@@ -1,8 +1,10 @@
-"""VibeGuard pre-merge diff safety gate (issues #10, #91, #125).
+"""VibeGuard domain safety gate (issues #10, #91, #125).
 
-A dependency-free, offline stand-in for the official VibeGuard action. It inspects a
-unified diff for the change classes documented in [`demos/README.md`](../demos/README.md)
-that quietly weaken the agent's safety posture and that no other CI check catches:
+A dependency-free, offline *domain gate* that complements the official VibeGuard action
+rather than standing in for it. The official ``vibeguard-gate`` runs as a separate CI job
+and covers artifact hygiene; this script inspects a unified diff for the repo-specific
+change classes documented in [`demos/README.md`](../demos/README.md) that quietly weaken the
+agent's safety posture and that neither the official gate nor any other CI check catches:
 
 1. **Widened money-movement / fallback bound** — e.g. the unsafe baseline's hardcoded
    fallback refund amount, or raising ``REFUND_AUTO_LIMIT``. This is the class the
@@ -16,11 +18,12 @@ that quietly weaken the agent's safety posture and that no other CI check catche
 clean. Only changes to the agent's *runtime* source are scanned -- tests, docs, demo
 fixtures, and these maintenance scripts are skipped (see ``_IGNORED_PREFIXES``), so example
 diffs and the gate's own vocabulary do not trip it. Run it directly (``python
-scripts/vibeguard_gate.py --self-check`` or ``make vibeguard``), pipe a diff (``git diff
+scripts/vibeguard_gate.py --self-check`` or ``make vibeguard-domain``), pipe a diff (``git diff
 origin/main...HEAD | python scripts/vibeguard_gate.py``), or import ``scan_diff`` from a test.
 
-This is a reference-architecture stand-in, not production protection; the official
-VibeGuard action plugs in at the same workflow step (see [`docs/vibeguard.md`](../docs/vibeguard.md)).
+This is a reference-architecture domain gate, not production protection; it runs alongside
+the official VibeGuard action, which provides the artifact-hygiene layer (see
+[`docs/vibeguard.md`](../docs/vibeguard.md)).
 """
 
 from __future__ import annotations
@@ -41,7 +44,7 @@ _MONEY_CONTEXT = re.compile(
 
 # Outbound network primitives -- this repo is offline-only, so an added call is suspect.
 _NETWORK = re.compile(
-    r"requests\.|httpx\.|urllib|urlopen|http\.client|socket\.|aiohttp|\.get\(['\"]https?://"
+    r"requests\.|httpx\.|urllib\.request|urlopen|http\.client|socket\.|aiohttp|\.get\(['\"]https?://"
 )
 
 # A dotted capability literal inside a string, e.g. "billing.issue_refund".
