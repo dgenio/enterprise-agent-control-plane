@@ -1,4 +1,4 @@
-.PHONY: setup demo baseline test eval docs-health vibeguard vibeguard-domain
+.PHONY: setup demo baseline test eval docs-health traceability vibeguard vibeguard-domain
 
 setup:
 	python -m pip install -e .
@@ -17,6 +17,9 @@ eval:
 
 docs-health:
 	python scripts/check_docs_health.py
+
+traceability:
+	python scripts/check_traceability.py
 
 vibeguard:
 	vibeguard gate --fail-on high

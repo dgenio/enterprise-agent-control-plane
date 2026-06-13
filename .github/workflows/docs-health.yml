@@ -23,3 +23,8 @@ jobs:
         # README.md / docs/ must resolve, and the canonical description in METADATA.md must
         # appear verbatim in README.md, pyproject.toml, and CITATION.cff.
         run: python scripts/check_docs_health.py
+      - name: Validate control traceability matrix
+        # Dependency-free, offline guard (issue #133): each row of
+        # docs/control-traceability.md must use a constrained status, name a known library,
+        # link to existing code, and reference a tracking issue when not yet Implemented.
+        run: python scripts/check_traceability.py
