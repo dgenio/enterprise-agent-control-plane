@@ -16,6 +16,10 @@ documentation; start here, then follow the links below.
 - [Glossary](glossary.md) — canonical definitions of the core vocabulary,
   linked to where each term lives in the code.
 - [FAQ](faq.md) — direct answers to common agent-governance questions.
+- [Examples gallery](examples.md) — runnable, copy-paste snippets, one per
+  governed capability.
+- [Daily Driver / workshop guide](workshop-guide.md) — running this in a
+  workshop or stakeholder demo.
 
 ## Architecture & governance
 
@@ -28,6 +32,8 @@ documentation; start here, then follow the links below.
 - [Threat model](threat-model.md) — the baseline risks each control addresses.
 - [Control traceability matrix](control-traceability.md) — each baseline risk
   mapped to the governed control, the dgenio library, and the code.
+- [Integration maturity matrix](maturity-matrix.md) — which controls are local
+  reference implementations, real packages, or planned.
 - [VibeGuard gate](vibeguard.md) — the pre-merge diff safety gate that flags
   AI-generated changes which quietly weaken the agent's safety posture.
 - [Evaluation methodology](evaluation-methodology.md) — offline scoring of
@@ -53,6 +59,10 @@ documentation; start here, then follow the links below.
   combined into one realistic, un-investigable incident.
 - [Listing snippets](listing-snippets.md) — ready-to-copy descriptions for
   external listings.
+- [Claims & receipts](../CLAIMS.md) — every before/after number backed by a
+  command and a generated artifact.
+- [Demo & sharing assets](assets/README.md) — diagram source, captured demo
+  output, and the social-card plan.
 
 ## Running it
 
