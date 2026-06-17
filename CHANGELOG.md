@@ -10,52 +10,48 @@ exercise — they make no production-readiness or security claims.
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-06-06
-
-Initial public reference point. The repository runs a fully offline
-baseline-vs-governed contrast for a Customer Operations agent.
+## [0.2.0] - 2026-06-17
 
 ### Added
 
-- **Unsafe baseline** (`BaselineAgent`) demonstrating the "before" gaps over a
-  realistic multi-case workload: full tool catalog every step, raw-output
-  leakage, cumulative context growth, poor tool selection, indirect prompt
-  injection, missing execution contract, sensitive-data exfiltration,
-  durable-log leakage, no aggregate budget, policy-blind writes, audit-light
-  logging, and a lost operator correction.
-- **Governed control plane** (`GovernedAgent`): bounded capability shortlist
-  (context firewall), deterministic flow registry/runner, allow/deny/ask policy
-  gate with action classes and a deny-by-default posture, scoped capability
-  tokens, separation-of-duties approval handling, bounded output frames, gated
-  Frame expansion, and a schema-validated, per-step, tamper-evident audit trace.
-- **Offline evaluation lane** (`evals.py`, `evals/`) scoring candidate routers
-  and policies against committed golden datasets, wired as a CI regression gate.
-- **Lesson-capture stub** (`lessons.py`) staging reviewed lessons.
-- Runnable entry points: `make setup`, `make demo`, `make baseline`,
-  `make test`, `make eval`.
-- Documentation set under `docs/` (architecture, governance model, threat model,
-  audit trace, evaluation methodology, adoption path, comparison, glossary, FAQ,
-  consultant playbook, roadmap, baseline write-ups) plus `README.md`,
-  `PROJECT_SUMMARY.md`, `llms.txt`, and `METADATA.md`.
-- Repository health files: `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`,
-  `CODE_OF_CONDUCT.md`, `AGENTS.md`, issue templates, and a pull-request template.
-- CI workflows: unit tests, the offline evaluation gate, a docs-health check,
-  and a VibeGuard placeholder.
+- **VibeGuard diff gate** — replaced the placeholder CI workflow with a real
+  offline gate that scans for risky AI-generated changes (two-layer: official
+  hygiene patterns + domain-specific rules). Covered by tests and documented in
+  [`docs/vibeguard.md`](docs/vibeguard.md).
+- **Governed multi-case workload** — `GovernedAgent` now surfaces a full
+  multi-case workload with a role matrix, JIT case-scoped capability tokens,
+  and a reviewed-lesson loop. Tests and demo entry point updated.
+- **Offline evaluation scorecard** — per-case scoring and aggregate scorecard
+  output for the governed path.
+- **Docs-health CI gate** — checks internal links and enforces the canonical
+  description across docs. Negative tests and scoped triggers included.
+- **Traceability matrix** — [`docs/control-traceability.md`](docs/control-traceability.md)
+  maps each baseline risk to its governed control.
+- **Community health files** — `CODE_OF_CONDUCT.md` and `AGENTS.md` operating
+  guide for automated contributors.
+- **CHANGELOG and CITATION.cff** — enriched metadata and release notes.
 
-### Notes
+### Changed
 
-- The dgenio ecosystem libraries (contextweaver, ChainWeaver, agent-kernel,
-  AgentFence, skdr-eval, lessonweaver, VibeGuard) are demonstrated as local
-  patterns, not consumed as live dependencies. The only runtime dependency is
-  `pydantic`.
+- Expanded thin documentation pages with summaries and cross-links.
+
+### Fixed
+
+- Enforced case-token scope and unique per-case audit traces in the governed
+  path.
+- Kept gated actions inside the aggregate budget; clarified Frame-handling
+  comments.
+- Aligned VibeGuard domain-gate docstring and narrowed the network regex.
+- Reworded a synthetic email subject to avoid a SQL false positive in scans.
 
 <!--
 Release process (requires repository admin; not performed automatically):
-  git tag -a v0.1.0 -m "v0.1.0"
-  git push origin v0.1.0
-Then publish a GitHub Release for v0.1.0 whose notes reuse the canonical
+  git tag -a v0.2.0 -m "v0.2.0"
+  git push origin v0.2.0
+Then publish a GitHub Release for v0.2.0 whose notes reuse the canonical
 description and link the README, the demo, and the docs index.
 -->
 
-[Unreleased]: https://github.com/dgenio/enterprise-agent-control-plane/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/dgenio/enterprise-agent-control-plane/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/dgenio/enterprise-agent-control-plane/releases/tag/v0.2.0
 [0.1.0]: https://github.com/dgenio/enterprise-agent-control-plane/releases/tag/v0.1.0

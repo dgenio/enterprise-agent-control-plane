@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "enterprise-agent-control-plane"
-version = "0.1.0"
+version = "0.2.0"
 description = "Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces."
 readme = "README.md"
 requires-python = ">=3.10"
