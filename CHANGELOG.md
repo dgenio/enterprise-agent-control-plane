@@ -10,6 +10,31 @@ exercise — they make no production-readiness or security claims.
 
 ## [Unreleased]
 
+### Added
+
+- **Examples gallery** (`examples/`, `docs/examples.md`): runnable, copy-paste
+  snippets demonstrating the bounded shortlist, allow/deny/ask policy decisions,
+  deterministic flow execution, and audit-trace export in isolation (issue #62).
+- **Integration maturity matrix** (`docs/maturity-matrix.md`): which controls are
+  local reference implementations, which use a real package, and which are
+  planned, linked to code and tracking issues (issue #143).
+- **Claims & receipts** (`CLAIMS.md`): every before/after contrast number tied to
+  the command that produces it and the generated artifact (issue #142).
+- **Daily Driver / workshop guide** (`docs/workshop-guide.md`): setup, demo
+  script, talking points, expected outputs, objections, and follow-ups (issue #141).
+- **Demo & sharing assets** (`docs/assets/`): Mermaid architecture source, a
+  captured annotated demo-output snippet, and a social-card plan (issue #53).
+- **Traceability-matrix guardrail** (`scripts/check_traceability.py`,
+  `tests/test_traceability.py`, `make traceability`, docs-health CI step):
+  validates the control traceability matrix's statuses, library names, code
+  links, and issue references (issue #133).
+
+### Changed
+
+- README ecosystem links no longer carry the "placeholder" framing; the library
+  list is an accurate table with canonical names, aliases, and `weaver-spec`
+  (issue #144).
+
 ## [0.2.0] - 2026-06-17
 
 ### Added

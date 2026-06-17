@@ -1,0 +1,22 @@
+%% enterprise-agent-control-plane — baseline vs governed control plane
+%% Source for the README architecture diagram and external embeds (issue #53).
+%% Render with the Mermaid CLI: mmdc -i architecture.mmd -o architecture.svg
+flowchart LR
+    U[Support Operator] --> B[Unsafe Baseline Agent]
+    U --> G[Governed Agent Control Plane]
+
+    subgraph Baseline [Unsafe baseline]
+        B --> T1[Full tool catalog every step]
+        B --> R1[Raw tool outputs in context]
+        B --> W1[Policy-blind writes]
+    end
+
+    subgraph Governed [Governed control plane]
+        G --> CW[contextweaver: bounded shortlist]
+        CW --> CH[ChainWeaver: deterministic flow]
+        CH --> AK[agent-kernel: capability tokens + Frames]
+        AK --> AF[AgentFence: allow/deny/ask gate]
+        AF --> AU[agent-kernel: audit trace]
+        AU --> EV[skdr-eval: offline comparison]
+        EV --> LW[lessonweaver: reviewed lessons]
+    end

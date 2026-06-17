@@ -1,0 +1,34 @@
+Captured, annotated excerpt of `make demo` (issue #53).
+Numbers are computed from the live offline runs, not hand-written.
+Full output: run `make demo` from the repository root.
+
+=== Customer Operations Agent Demo ===
+
+[1] Unsafe baseline -- realistic multi-case Customer Operations workload
+  case 'refund': 'refund request' -> steps ['crm.search_customer', 'billing.get_invoice', 'billing.issue_refund']
+    demonstrates: policy-blind destructive write plus raw-output leakage
+    RISK policy-blind write(s): ['billing.issue_refund']
+
+[1a] Risk anatomy of the refund case
+RISK over-permissioned context: 9 tools offered every step -> full-catalog context = 1290 chars (~322 tokens)
+RISK cumulative context growth (full catalog re-sent + raw outputs retained):
+  -> context grew 417 chars across the run; a bounded shortlist + Frame would flatten this
+RISK per-step model round-trips: 4 router decisions on a fixed path (a compiled flow needs ~1)
+
+[2] Governed control plane
+Context firewall (#24): model-visible shortlist = 108 chars vs full catalog 1290 chars (92% smaller)
+Deterministic flow steps: ['lookup_customer', 'lookup_invoice', 'check_policy', 'draft_reply']
+Bounded Frame (#22/#37) for crm.search_customer: 9 field(s); visible ['customer_id', 'name', 'tier']; 6 sensitive field(s) redacted
+Gated action billing.issue_refund (destructive) -> approval_required
+Audit trace emitted: traces/governed_run_C-100_INV-9_refund.json
+
+[3] Side-by-side contrast (same refund case, both paths)
+  dimension                             |   baseline |   governed
+  ------------------------------------- | ---------- | ----------
+  tools exposed to the model            |          9 |          5
+  approx model-visible context (chars)  |       1290 |        108
+  raw sensitive fields in model context |         14 |          0
+  ungated write/destructive actions     |          1 |          0
+  policy decisions recorded             |          0 |          1
+  structured audit trace                |       none |        yes
+  gated action: billing.issue_refund -> approval_required

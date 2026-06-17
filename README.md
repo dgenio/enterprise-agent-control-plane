@@ -72,6 +72,9 @@ flowchart LR
     G --> LW[lessonweaver reviewed lessons]
 ```
 
+Shareable, externally-embeddable versions of this diagram and a captured demo
+snippet live under [`docs/assets/`](docs/assets/README.md).
+
 ## Demo walkthrough
 
 `make demo` runs the unsafe baseline across a realistic Customer Operations workload,
@@ -199,9 +202,13 @@ Start at the [documentation index](docs/README.md). Highlights:
 
 - [Glossary](docs/glossary.md) — canonical definitions, linked to the code.
 - [FAQ](docs/faq.md) — common agent-governance questions answered directly.
+- [Examples gallery](docs/examples.md) — runnable, copy-paste snippets for each governed capability.
 - [Recommended adoption path](docs/adoption-path.md) — layer the controls one at a time.
+- [Daily Driver / workshop guide](docs/workshop-guide.md) — run this in a workshop or stakeholder demo.
 - [Comparison](docs/comparison.md) — how this relates to neighboring approaches.
 - [Control traceability matrix](docs/control-traceability.md) — each baseline risk mapped to its governed control, library, and code.
+- [Integration maturity matrix](docs/maturity-matrix.md) — which controls are local stand-ins vs real packages.
+- [Claims & receipts](CLAIMS.md) — every contrast number backed by a command and an artifact.
 
 How to contribute: [`CONTRIBUTING.md`](CONTRIBUTING.md) and our
 [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md). Security scope and reporting:
@@ -212,12 +219,20 @@ Working in this repo as an AI coding agent? See [`AGENTS.md`](AGENTS.md).
 
 This is a runnable **reference architecture and learning repository**, not production security software and not a production hardening guide.
 
-## Library links (placeholders)
+## Ecosystem libraries
 
-- contextweaver: https://github.com/dgenio/contextweaver
-- ChainWeaver: https://github.com/dgenio/chainweaver
-- agent-kernel: https://github.com/dgenio/agent-kernel
-- AgentFence: https://github.com/dgenio/agentfence
-- skdr-eval: https://github.com/dgenio/skdr-eval
-- lessonweaver: https://github.com/dgenio/lessonweaver
-- VibeGuard: https://github.com/dgenio/vibeguard
+The Weaver Stack libraries this architecture maps to. The display name is the
+canonical spelling used throughout the docs; the repository slug is lowercase.
+How realised each integration is today (local reference implementation vs real
+package) is the [integration maturity matrix](docs/maturity-matrix.md).
+
+| Library | Repository | Notes |
+|---|---|---|
+| contextweaver | https://github.com/dgenio/contextweaver | Bounded context / shortlist |
+| ChainWeaver | https://github.com/dgenio/chainweaver | Deterministic flow executor |
+| agent-kernel | https://github.com/dgenio/agent-kernel | Capability tokens, Frames, audit (aka `weaver-kernel`) |
+| AgentFence | https://github.com/dgenio/agentfence | allow/deny/ask policy gate |
+| skdr-eval | https://github.com/dgenio/skdr-eval | Offline evaluation |
+| lessonweaver | https://github.com/dgenio/lessonweaver | Reviewed-lesson capture |
+| VibeGuard | https://github.com/dgenio/vibeguard | Pre-merge safety gate (`vibeguard-gate` on PyPI) |
+| weaver-spec | https://github.com/dgenio/weaver-spec | Shared domain/type contracts |
