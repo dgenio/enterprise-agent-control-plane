@@ -36,8 +36,8 @@ _MATRIX = Path("docs") / "control-traceability.md"
 # The column the matrix declares (used to locate the table and to label errors).
 _COLUMNS = ("Baseline risk", "Governed control", "dgenio library", "Where it lives", "Status")
 
-# Constrained status vocabulary. A status cell must begin (case-insensitively) with one of
-# these; the longest match wins so "Local stand-in" is not shadowed by a shorter token.
+# Constrained status vocabulary. A status cell is valid when it begins (case-insensitively)
+# with one of these tokens; a cell may carry trailing detail (e.g. "Partial (issue #68)").
 _ALLOWED_STATUSES = ("implemented", "local stand-in", "partial", "planned")
 
 # The verified Weaver Stack library inventory (issue #80), plus the documented aliases
