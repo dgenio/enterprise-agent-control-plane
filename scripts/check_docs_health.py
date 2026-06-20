@@ -10,10 +10,14 @@ docs evolve:
    ``METADATA.md`` appears verbatim (modulo line wrapping) in ``README.md``,
    ``pyproject.toml``, and ``CITATION.cff``, so the tagline cannot quietly say three
    different things across surfaces.
+3. **Version consistency (issue #192)** — the ``pyproject.toml`` version has a matching
+   ``## [<version>]`` section in ``CHANGELOG.md`` and the ``CITATION.cff`` version agrees,
+   so a release cannot ship with a stale changelog or citation version.
 
 Run it directly (``python scripts/check_docs_health.py`` or ``make docs-health``) or import
-``check_links`` / ``check_canonical_description`` / ``collect_errors`` from a test. Each
-returns a list of human-readable error strings; an empty list means the check passed.
+``check_links`` / ``check_canonical_description`` / ``check_version_consistency`` /
+``collect_errors`` from a test. Each returns a list of human-readable error strings; an empty
+list means the check passed.
 """
 
 from __future__ import annotations
@@ -120,10 +124,60 @@ def check_canonical_description(root: Path | None = None) -> list[str]:
     return errors
 
 
-def collect_errors(root: Path | None = None) -> list[str]:
-    """All docs-health errors (links + canonical description)."""
+# --- Version consistency (issue #192) ---------------------------------------------------
+# The project version is declared in pyproject.toml. A release with a CHANGELOG that lacks a
+# matching section, or a CITATION.cff that names a different version, undermines the
+# "stable, citable reference" promise -- so keep the three in lockstep.
+_PYPROJECT_VERSION = re.compile(r'(?m)^version\s*=\s*"([^"]+)"')
+_CITATION_VERSION = re.compile(r'(?m)^version:\s*"?([^"\n]+?)"?\s*$')
+
+
+def _pyproject_version(root: Path) -> str | None:
+    text = (root / "pyproject.toml").read_text(encoding="utf-8")
+    match = _PYPROJECT_VERSION.search(text)
+    return match.group(1) if match else None
+
+
+def check_version_consistency(root: Path | None = None) -> list[str]:
+    """Return an error per version drift across pyproject / CHANGELOG / CITATION (issue #192)."""
     root = root or repo_root()
-    return check_links(root) + check_canonical_description(root)
+    errors: list[str] = []
+
+    pyproject = root / "pyproject.toml"
+    if not pyproject.is_file():
+        return ["pyproject.toml: missing (cannot verify version consistency)"]
+    version = _pyproject_version(root)
+    if not version:
+        return ["pyproject.toml: could not find a project version"]
+
+    changelog = root / "CHANGELOG.md"
+    if not changelog.is_file():
+        errors.append("CHANGELOG.md: missing (cannot verify version section)")
+    elif f"## [{version}]" not in changelog.read_text(encoding="utf-8"):
+        errors.append(
+            f"CHANGELOG.md: no section heading for the pyproject version -- expected "
+            f"'## [{version}]'"
+        )
+
+    citation = root / "CITATION.cff"
+    if not citation.is_file():
+        errors.append("CITATION.cff: missing (cannot verify version)")
+    else:
+        match = _CITATION_VERSION.search(citation.read_text(encoding="utf-8"))
+        if match is None:
+            errors.append("CITATION.cff: could not find a version field")
+        elif match.group(1).strip() != version:
+            errors.append(
+                f"CITATION.cff: version drift -- says {match.group(1).strip()!r} but "
+                f"pyproject.toml says {version!r}"
+            )
+    return errors
+
+
+def collect_errors(root: Path | None = None) -> list[str]:
+    """All docs-health errors (links + canonical description + version consistency)."""
+    root = root or repo_root()
+    return check_links(root) + check_canonical_description(root) + check_version_consistency(root)
 
 
 def main() -> int:
@@ -138,7 +192,10 @@ def main() -> int:
             "(the single source of truth for the canonical tagline)."
         )
         return 1
-    print("docs-health: OK (internal links resolve; canonical description is consistent)")
+    print(
+        "docs-health: OK (internal links resolve; canonical description and "
+        "version metadata are consistent)"
+    )
     return 0
 
 

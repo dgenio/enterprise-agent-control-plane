@@ -21,6 +21,21 @@ illustrative only and contain no real credentials, PII, or live endpoints.
 See the "What this repo is / is not" section of the [README](README.md) and the
 [FAQ](docs/faq.md) for the full framing.
 
+## Supply-chain hygiene
+
+A governance reference is judged partly on its own supply-chain posture, so the
+repository models the hygiene it advocates (issue #152):
+
+- **Pinned GitHub Actions.** Every workflow pins each `uses:` action to a full
+  commit SHA (with a version comment), not a floating tag.
+- **Dependabot.** [`.github/dependabot.yml`](.github/dependabot.yml) keeps the
+  `github-actions` and `pip` ecosystems current weekly, including bumping the
+  SHA-pinned actions.
+- **CodeQL.** [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml)
+  runs code scanning on pushes, pull requests, and a weekly schedule.
+
+This is defensive hygiene for example code, not a production-hardening claim.
+
 ## Reporting a problem in the example code
 
 This project does not run a formal vulnerability-disclosure program and offers

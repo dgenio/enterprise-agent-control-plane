@@ -6,6 +6,7 @@ from scripts.check_docs_health import (
     canonical_description,
     check_canonical_description,
     check_links,
+    check_version_consistency,
     collect_errors,
     repo_root,
 )
@@ -27,6 +28,10 @@ class TestDocsHealth(unittest.TestCase):
         # The description must be the honest, non-aspirational About string.
         self.assertIn("reference architecture", description)
         self.assertIn("tool-using agents", description)
+
+    def test_version_consistency(self):
+        errors = check_version_consistency(repo_root())
+        self.assertEqual(errors, [], f"version drift across pyproject/CHANGELOG/CITATION: {errors}")
 
     def test_collect_errors_is_clean(self):
         self.assertEqual(collect_errors(repo_root()), [])
@@ -64,9 +69,7 @@ class TestDocsHealthDetection(unittest.TestCase):
         (root / "docs").mkdir()
         # Target resolves outside the repo root (and exists on the runner) -- must be
         # rejected rather than silently passing.
-        (root / "README.md").write_text(
-            "[x](../../../../../../etc/hosts)\n", encoding="utf-8"
-        )
+        (root / "README.md").write_text("[x](../../../../../../etc/hosts)\n", encoding="utf-8")
         errors = check_links(root)
         self.assertTrue(
             any("escapes repo root" in e for e in errors),
@@ -77,9 +80,7 @@ class TestDocsHealthDetection(unittest.TestCase):
         root = self._tmp_root()
         self._write_metadata(root)
         (root / "README.md").write_text(_CANON + "\n", encoding="utf-8")
-        (root / "pyproject.toml").write_text(
-            f'description = "{_CANON}"\n', encoding="utf-8"
-        )
+        (root / "pyproject.toml").write_text(f'description = "{_CANON}"\n', encoding="utf-8")
         # CITATION.cff drifts: it does not carry the canonical tagline verbatim.
         (root / "CITATION.cff").write_text(
             "abstract: A different tagline entirely.\n", encoding="utf-8"
@@ -90,14 +91,53 @@ class TestDocsHealthDetection(unittest.TestCase):
             f"expected a CITATION.cff drift error, got: {errors}",
         )
 
+    def _write_versioned_repo(self, root: Path, *, citation_version: str) -> None:
+        """A minimal repo whose pyproject is 1.2.3, with a configurable CITATION version."""
+        (root / "pyproject.toml").write_text('version = "1.2.3"\n', encoding="utf-8")
+        (root / "CHANGELOG.md").write_text("## [1.2.3]\n\n- thing\n", encoding="utf-8")
+        (root / "CITATION.cff").write_text(f'version: "{citation_version}"\n', encoding="utf-8")
+
+    def test_citation_version_drift_is_flagged(self):
+        root = self._tmp_root()
+        self._write_versioned_repo(root, citation_version="9.9.9")
+        errors = check_version_consistency(root)
+        self.assertTrue(
+            any("CITATION.cff" in e and "drift" in e for e in errors),
+            f"expected a CITATION.cff version-drift error, got: {errors}",
+        )
+
+    def test_missing_changelog_section_is_flagged(self):
+        root = self._tmp_root()
+        (root / "pyproject.toml").write_text('version = "1.2.3"\n', encoding="utf-8")
+        (root / "CHANGELOG.md").write_text("## [0.0.1]\n\n- old\n", encoding="utf-8")
+        (root / "CITATION.cff").write_text('version: "1.2.3"\n', encoding="utf-8")
+        errors = check_version_consistency(root)
+        self.assertTrue(
+            any("CHANGELOG.md" in e for e in errors),
+            f"expected a missing-CHANGELOG-section error, got: {errors}",
+        )
+
+    def test_consistent_versions_pass(self):
+        root = self._tmp_root()
+        self._write_versioned_repo(root, citation_version="1.2.3")
+        self.assertEqual(check_version_consistency(root), [])
+
     def test_consistent_temp_repo_passes(self):
         # Positive control for the temp-repo harness so the negative tests above are
         # meaningful (the failures come from the injected defect, not the scaffolding).
+        # Carries both the canonical description and consistent version metadata so the
+        # full collect_errors() (links + description + version) comes back clean.
         root = self._tmp_root()
         (root / "docs").mkdir()
         self._write_metadata(root)
-        for name in ("README.md", "pyproject.toml", "CITATION.cff"):
-            (root / name).write_text(_CANON + "\n", encoding="utf-8")
+        (root / "README.md").write_text(_CANON + "\n", encoding="utf-8")
+        (root / "pyproject.toml").write_text(
+            f'version = "1.2.3"\ndescription = "{_CANON}"\n', encoding="utf-8"
+        )
+        (root / "CHANGELOG.md").write_text("## [1.2.3]\n\n- thing\n", encoding="utf-8")
+        (root / "CITATION.cff").write_text(
+            f'version: "1.2.3"\nabstract: "{_CANON}"\n', encoding="utf-8"
+        )
         self.assertEqual(collect_errors(root), [])
 
 

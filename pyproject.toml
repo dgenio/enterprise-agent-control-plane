@@ -46,12 +46,50 @@ Documentation = "https://github.com/dgenio/enterprise-agent-control-plane/blob/m
 Issues = "https://github.com/dgenio/enterprise-agent-control-plane/issues"
 
 [project.optional-dependencies]
-# Dev/CI-only tooling -- not required to run the demo or tests. `dev` installs the official
-# VibeGuard pre-merge safety gate (issues #91/#125); `pip install -e .[dev]` then `make vibeguard`.
-dev = ["vibeguard-gate==0.9.0"]
+# Dev/CI-only tooling -- not required to run the demo or tests. The runtime dependency set
+# stays just `pydantic`. `pip install -e .[dev]` installs the official VibeGuard pre-merge
+# safety gate (issues #91/#125) plus the lint/type/coverage/pre-commit toolchain (issues
+# #150/#175/#200). Versions are pinned so local runs match CI.
+dev = [
+    "vibeguard-gate==0.9.0",
+    "ruff==0.15.8",
+    "mypy==1.19.1",
+    "coverage==7.14.1",
+    "pre-commit==4.6.0",
+]
 
 [tool.setuptools]
 packages = ["enterprise_agent_control_plane"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+
+# --- Lint / format (ruff) -- issue #150 -------------------------------------------------
+# Line length matches the existing code; the rule set is pragmatic (errors, undefined names,
+# import order, modern-syntax, common bugs) rather than exhaustive, to enforce quality without
+# blocking contributors on stylistic nits.
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+# `ruff format` owns line wrapping (and intentionally leaves long string/comment lines
+# alone), so E501 is delegated to the formatter rather than enforced as a lint error.
+ignore = ["E501"]
+
+# --- Static type check (mypy) -- issue #150 ---------------------------------------------
+# Scoped to the package and the helper scripts. `ignore_missing_imports` keeps the gate green
+# without stubs for optional/dev-only tooling; the runtime code is consistently type-hinted.
+[tool.mypy]
+python_version = "3.10"
+files = ["enterprise_agent_control_plane", "scripts"]
+ignore_missing_imports = true
+
+# --- Coverage (non-blocking report) -- issue #175 ---------------------------------------
+[tool.coverage.run]
+branch = true
+source = ["enterprise_agent_control_plane"]
+
+[tool.coverage.report]
+show_missing = true

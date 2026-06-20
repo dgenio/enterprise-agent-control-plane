@@ -1,0 +1,34 @@
+# Pre-commit hooks mirroring the CI gates (issue #200): fast, offline checks that run before a
+# commit so contributors catch issues locally instead of waiting for CI. The slow checks (the
+# full test matrix) stay in CI only. Set up with:
+#
+#   pip install -e .[dev]
+#   pre-commit install
+#
+repos:
+  # Lint + format, matching the pinned ruff version in pyproject's dev extra (issue #150).
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.8
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # In-repo guards run as local hooks so they need no network and reuse the committed scripts.
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy (package + scripts)
+        entry: mypy
+        language: system
+        pass_filenames: false
+      - id: docs-health
+        name: docs-health (links, canonical description, version consistency)
+        entry: python scripts/check_docs_health.py
+        language: system
+        pass_filenames: false
+      - id: vibeguard-domain
+        name: vibeguard domain-gate self-check
+        entry: python scripts/vibeguard_gate.py --self-check
+        language: system
+        pass_filenames: false
