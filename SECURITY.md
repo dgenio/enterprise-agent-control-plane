@@ -32,7 +32,10 @@ repository models the hygiene it advocates (issue #152):
   `github-actions` and `pip` ecosystems current weekly, including bumping the
   SHA-pinned actions.
 - **CodeQL.** [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml)
-  runs code scanning on pushes, pull requests, and a weekly schedule.
+  runs code scanning on pushes, pull requests, and a weekly schedule. The
+  [config](.github/codeql/codeql-config.yml) excludes `apps/`: the demo CLI
+  deliberately prints the unsafe baseline's leaked (synthetic) fields to
+  illustrate the risk, so scanning it would flag the demonstration itself.
 
 This is defensive hygiene for example code, not a production-hardening claim.
 

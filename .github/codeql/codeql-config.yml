@@ -1,0 +1,11 @@
+name: "CodeQL config"
+
+# The demo CLI under apps/ deliberately prints the *unsafe baseline's* output to
+# illustrate the very risks the governed path fixes -- raw tool-output leakage and
+# sensitive-looking fields forwarded verbatim. That synthetic, [FAKE]-only data is the
+# teaching contrast, not a defect, and "fixing" it would defeat the demonstration (see
+# AGENTS.md: do not fix the baseline). Excluding apps/ keeps CodeQL meaningful for the
+# governed library, scripts, examples, and tests without flagging the intentional demo
+# (issue #152).
+paths-ignore:
+  - apps
