@@ -93,7 +93,11 @@ class FrameStore:
         # steps that return identical payloads still get distinct handles -- this is
         # deliberately NOT a pure content address, so callers must not assume handle stability
         # across identical payloads (see test_identical_payloads_get_distinct_handles).
-        seed = json.dumps({"capability": capability, "output": output, "n": len(self._raw)}, sort_keys=True, default=str)
+        seed = json.dumps(
+            {"capability": capability, "output": output, "n": len(self._raw)},
+            sort_keys=True,
+            default=str,
+        )
         handle = "frame-" + hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12]
         self._raw[handle] = output
         summary = self._summarize(capability, output, keys, redacted)
@@ -117,7 +121,11 @@ class FrameStore:
         else:
             shape = "scalar value"
         detail = f"; visible fields: {visible}" if visible else ""
-        redaction = f"; {len(redacted)} sensitive field(s) redacted ({sorted(redacted)})" if redacted else ""
+        redaction = (
+            f"; {len(redacted)} sensitive field(s) redacted ({sorted(redacted)})"
+            if redacted
+            else ""
+        )
         return f"{capability} returned {shape}{detail}{redaction}; raw detail behind handle."
 
     def has(self, handle: str) -> bool:

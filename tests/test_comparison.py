@@ -25,7 +25,9 @@ class TestComparisonScorecard(unittest.TestCase):
         self.assertEqual(rows["structured audit trace"]["baseline"], "none")
 
         # Every directional dimension favors the governed path.
-        self.assertTrue(all(row["governed_better"] for row in comparison.build_scorecard()["dimensions"]))
+        self.assertTrue(
+            all(row["governed_better"] for row in comparison.build_scorecard()["dimensions"])
+        )
 
     def test_numbers_are_derived_from_runs_not_hardcoded(self):
         rows = {row["dimension"]: row for row in comparison.build_scorecard()["dimensions"]}

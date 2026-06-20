@@ -27,7 +27,8 @@ Several variants exist on purpose:
 """
 
 import re
-from typing import Any, Mapping, Protocol, Sequence
+from collections.abc import Mapping, Sequence
+from typing import Any, Protocol
 
 
 # A router sees the request, the capabilities already called, and the accumulated raw
@@ -40,12 +41,16 @@ class Router(Protocol):
     ) -> "str | None": ...
 
 
-def route_v1(request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None) -> "str | None":
+def route_v1(
+    request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None
+) -> "str | None":
     """Baseline router v1: on the email path it sends a reply directly."""
     return _route(request, called, email_capability="email.send_reply")
 
 
-def route_v2(request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None) -> "str | None":
+def route_v2(
+    request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None
+) -> "str | None":
     """Baseline router v2: same as v1 but drafts the email instead of sending it.
 
     Shipped on intuition with no offline comparison against v1 (issue #20).
@@ -83,7 +88,9 @@ def _route(request: str, called: Sequence[str], *, email_capability: str) -> "st
     return None
 
 
-def route_greedy(request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None) -> "str | None":
+def route_greedy(
+    request: str, called: Sequence[str], context: "Mapping[str, Any] | None" = None
+) -> "str | None":
     """Over-eager baseline router demonstrating poor tool selection (issue #30).
 
     With no bounded shortlist, every one of the nine tools is equally present in

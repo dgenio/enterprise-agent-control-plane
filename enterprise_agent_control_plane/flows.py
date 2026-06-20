@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, Optional
+from typing import Any, Optional
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,10 @@ FLOW_REGISTRY: dict[str, FlowDefinition] = {
     ),
     "customer_reply": FlowDefinition(
         flow_id="customer_reply",
-        steps=[FlowStep("lookup_customer", "crm.search_customer"), FlowStep("draft_reply", "email.draft_reply")],
+        steps=[
+            FlowStep("lookup_customer", "crm.search_customer"),
+            FlowStep("draft_reply", "email.draft_reply"),
+        ],
         gated_capabilities=("email.send_reply",),
     ),
     # Escalation does only its read-only prep here (search history). The risky write
@@ -111,8 +115,8 @@ class ChainWeaverExecutor:
         self,
         flow_id: str,
         payload: dict[str, Any],
-        token_check: Optional[Callable[[str], bool]] = None,
-        on_step: Optional[Callable[[dict[str, Any]], None]] = None,
+        token_check: Callable[[str], bool] | None = None,
+        on_step: Callable[[dict[str, Any]], None] | None = None,
         budget: Optional["set[str] | frozenset[str]"] = None,
     ) -> list[dict[str, Any]]:
         """Run a flow deterministically, optionally gating each step on a capability token.

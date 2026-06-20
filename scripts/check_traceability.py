@@ -123,14 +123,11 @@ def check_matrix(root: Path | None = None) -> list[str]:
         status_l = status.lower()
         if not any(status_l.startswith(tok) for tok in _ALLOWED_STATUSES):
             errors.append(
-                f"{risk!r}: status {status!r} is not one of the allowed values "
-                f"{_ALLOWED_STATUSES}"
+                f"{risk!r}: status {status!r} is not one of the allowed values {_ALLOWED_STATUSES}"
             )
 
         if not any(lib in library.lower() for lib in _KNOWN_LIBRARIES):
-            errors.append(
-                f"{risk!r}: library cell {library!r} names no known Weaver Stack library"
-            )
+            errors.append(f"{risk!r}: library cell {library!r} names no known Weaver Stack library")
 
         for match in _LINK.finditer(where):
             target = match.group(1).split(" ", 1)[0].strip()

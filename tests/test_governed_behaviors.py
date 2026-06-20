@@ -28,7 +28,9 @@ class TestGovernedBehaviors(unittest.TestCase):
         # Raw values from redacted fields must stay behind the handle, never inline.
         for raw_value in ("4242", "0.62", "0.08", "ari@example.com", "Springfield"):
             self.assertNotIn(raw_value, text)
-        invoice_frame = next(f for f in result["frames"] if f["capability"] == "billing.get_invoice")
+        invoice_frame = next(
+            f for f in result["frames"] if f["capability"] == "billing.get_invoice"
+        )
         self.assertIn("payment_method", invoice_frame["redacted_fields"])
         self.assertIn("internal_margin", invoice_frame["redacted_fields"])
         self.assertTrue(all(f["untrusted"] for f in result["frames"]))
@@ -45,7 +47,9 @@ class TestGovernedBehaviors(unittest.TestCase):
         self.assertEqual(result["bounded_output"]["gated_capability"], "support.create_task")
         self.assertEqual(fake_tools.REFUNDS, [])
         self.assertEqual(fake_tools.SENT_EMAILS, [])
-        tickets_frame = next(f for f in result["frames"] if f["capability"] == "support.search_tickets")
+        tickets_frame = next(
+            f for f in result["frames"] if f["capability"] == "support.search_tickets"
+        )
         self.assertTrue(tickets_frame["untrusted"])
         self.assertIn("agent_comments", tickets_frame["redacted_fields"])
         self.assertNotIn("attacker@evil.example.com", str(result["frames"]))
@@ -89,7 +93,9 @@ class TestGovernedBehaviors(unittest.TestCase):
     # --- #114: revealing a Frame's raw detail is gated and audited ----------------
     def test_frame_expansion_denied_for_unauthorized_principal(self):
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
-        invoice_frame = next(f for f in result["frames"] if f["capability"] == "billing.get_invoice")
+        invoice_frame = next(
+            f for f in result["frames"] if f["capability"] == "billing.get_invoice"
+        )
         trace = result["trace"]
         expanded = self.agent.expand_frame(invoice_frame["handle"], "support_agent", trace=trace)
         self.assertEqual(expanded["outcome"], "denied")
@@ -100,14 +106,17 @@ class TestGovernedBehaviors(unittest.TestCase):
 
     def test_frame_expansion_allowed_and_audited_for_authorized_principal(self):
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
-        invoice_frame = next(f for f in result["frames"] if f["capability"] == "billing.get_invoice")
+        invoice_frame = next(
+            f for f in result["frames"] if f["capability"] == "billing.get_invoice"
+        )
         trace = result["trace"]
         expanded = self.agent.expand_frame(invoice_frame["handle"], "support_manager", trace=trace)
         self.assertEqual(expanded["outcome"], "allowed")
         self.assertIsNotNone(expanded["revealed"])
         self.assertIn("payment_method", expanded["revealed_fields"])
         event = next(
-            e for e in trace.as_dict()["events"]
+            e
+            for e in trace.as_dict()["events"]
             if e["action"] == "frame.expand" and e["outcome"] == "revealed"
         )
         self.assertEqual(event["details"]["handle"], invoice_frame["handle"])

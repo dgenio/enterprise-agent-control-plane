@@ -49,7 +49,9 @@ def build_scorecard(
     baseline = BaselineAgent().run_case("refund request", customer_id, invoice_id)
 
     fake_tools.reset_state()
-    governed = GovernedAgent().run_case("refund request", customer_id, invoice_id, principal="support_agent")
+    governed = GovernedAgent().run_case(
+        "refund request", customer_id, invoice_id, principal="support_agent"
+    )
     fake_tools.reset_state()
 
     metric = governed["context_metric"] or {}
@@ -123,13 +125,15 @@ def render_markdown(scorecard: dict[str, Any]) -> str:
     for row in scorecard["dimensions"]:
         lines.append(f"| {row['dimension']} | {row['baseline']} | {row['governed']} |")
     gated = scorecard["gated_action"]
-    lines.extend([
-        "",
-        f"Gated action: `{gated['capability']}` -> **{gated['outcome']}**.",
-        "",
-        f"> {scorecard['note']}",
-        "",
-    ])
+    lines.extend(
+        [
+            "",
+            f"Gated action: `{gated['capability']}` -> **{gated['outcome']}**.",
+            "",
+            f"> {scorecard['note']}",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 

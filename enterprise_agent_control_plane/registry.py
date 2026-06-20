@@ -21,8 +21,9 @@ Adding a capability is a single edit here; ``tests/test_registry.py`` asserts th
 derived views stay in parity.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any
 
 from . import fake_tools
 
@@ -40,7 +41,7 @@ class CapabilitySpec:
     args_schema: dict[str, str] = field(default_factory=dict)
     # The bound tool callable, or ``None`` for a control-plane-only capability that has no
     # enterprise tool behind it (e.g. ``frame.expand``, which the agent mediates directly).
-    tool: Optional[Callable[..., Any]] = None
+    tool: Callable[..., Any] | None = None
     # Output field names a bounded Frame treats as sensitive and redacts (issue #22). Only
     # meaningful for capabilities that return such fields; empty for the rest.
     sensitive_fields: frozenset[str] = frozenset()
@@ -72,7 +73,9 @@ CAPABILITY_REGISTRY: dict[str, CapabilitySpec] = {
         action_class="read",
         args_schema={"invoice_id": "str"},
         tool=fake_tools.billing_get_invoice,
-        sensitive_fields=frozenset({"payment_method", "billing_address", "internal_margin", "fraud_score"}),
+        sensitive_fields=frozenset(
+            {"payment_method", "billing_address", "internal_margin", "fraud_score"}
+        ),
     ),
     "billing.issue_refund": CapabilitySpec(
         capability="billing.issue_refund",
@@ -159,7 +162,9 @@ def build_tool_map() -> dict[str, Callable[..., Any]]:
     The single map both agents use, so no agent hand-maintains its own tool dict. Only
     capabilities with a bound tool are included (``frame.expand`` is mediated by the agent).
     """
-    return {spec.capability: spec.tool for spec in CAPABILITY_REGISTRY.values() if spec.tool is not None}
+    return {
+        spec.capability: spec.tool for spec in CAPABILITY_REGISTRY.values() if spec.tool is not None
+    }
 
 
 def sensitive_fields(capability: str) -> frozenset[str]:

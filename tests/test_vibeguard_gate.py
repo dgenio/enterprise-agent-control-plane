@@ -107,10 +107,7 @@ class TestVibeGuardGate(unittest.TestCase):
         )
 
     def test_introducing_a_network_call_is_flagged(self):
-        diff = (
-            "@@ -1,0 +1,1 @@\n"
-            '+    response = requests.get("http://example.com/refund")\n'
-        )
+        diff = '@@ -1,0 +1,1 @@\n+    response = requests.get("http://example.com/refund")\n'
         findings = scan_diff(diff)
         self.assertTrue(
             any("outbound network call" in f for f in findings),

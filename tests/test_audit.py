@@ -19,8 +19,14 @@ def _valid_event(action: str, **details) -> dict:
         "flow.execute": {"flow_id": "f", "steps": 1},
         "flow.step": {"step": "s", "capability": "c", "token_valid": True, "result_ref": None},
         "policy.decision": {
-            "capability": "c", "principal": "p", "decision": "allow", "outcome": "allowed",
-            "reason": "why", "token_valid": True, "policy_version": "af-x", "policy_thresholds": {},
+            "capability": "c",
+            "principal": "p",
+            "decision": "allow",
+            "outcome": "allowed",
+            "reason": "why",
+            "token_valid": True,
+            "policy_version": "af-x",
+            "policy_thresholds": {},
         },
         "approval.request": {"capability": "c", "reason": "why"},
         "approval.resolved": {"capability": "c"},
@@ -33,7 +39,12 @@ class TestAuditModel(unittest.TestCase):
     # --- record / serialize / save round-trip (issue #9) ----------------------
     def test_record_and_as_dict(self):
         trace = AuditTrace("trace-1")
-        trace.record("agent", "request.received", "ok", {"request": "r", "intent": "refund", "principal": "agent"})
+        trace.record(
+            "agent",
+            "request.received",
+            "ok",
+            {"request": "r", "intent": "refund", "principal": "agent"},
+        )
         data = trace.as_dict()
         self.assertEqual(data["trace_id"], "trace-1")
         self.assertEqual(len(data["events"]), 1)
@@ -57,31 +68,53 @@ class TestAuditSchema(unittest.TestCase):
     # --- schema validation (issue #112) ---------------------------------------
     def test_complete_trace_validates(self):
         trace = AuditTrace("ok")
-        for action in ("request.received", "shortlist", "flow.select", "flow.execute",
-                       "policy.decision", "output.frame"):
+        for action in (
+            "request.received",
+            "shortlist",
+            "flow.select",
+            "flow.execute",
+            "policy.decision",
+            "output.frame",
+        ):
             trace.record("agent", action, "ok", _valid_event(action))
         result = trace.validate(require_complete=True)
         self.assertTrue(result.ok, result.errors)
         self.assertEqual(result.errors, [])
 
     def test_unknown_action_fails_validation(self):
-        events = [{"action": "bogus.action", "details": {}, "ts": "t", "actor": "a", "outcome": "ok"}]
+        events = [
+            {"action": "bogus.action", "details": {}, "ts": "t", "actor": "a", "outcome": "ok"}
+        ]
         result = validate_trace(events)
         self.assertFalse(result.ok)
         self.assertTrue(any("unknown action" in e for e in result.errors))
 
     def test_missing_required_field_fails_validation(self):
         # shortlist requires both 'capabilities' and 'reason'; drop 'reason'.
-        events = [{"action": "shortlist", "details": {"capabilities": []},
-                   "ts": "t", "actor": "a", "outcome": "ok"}]
+        events = [
+            {
+                "action": "shortlist",
+                "details": {"capabilities": []},
+                "ts": "t",
+                "actor": "a",
+                "outcome": "ok",
+            }
+        ]
         result = validate_trace(events)
         self.assertFalse(result.ok)
         self.assertTrue(any("reason" in e for e in result.errors))
 
     def test_non_dict_details_fails_without_raising(self):
         # A malformed trace (details is a list) must be reported, not crash the validator.
-        events = [{"action": "shortlist", "details": ["not", "a", "dict"],
-                   "ts": "t", "actor": "a", "outcome": "ok"}]
+        events = [
+            {
+                "action": "shortlist",
+                "details": ["not", "a", "dict"],
+                "ts": "t",
+                "actor": "a",
+                "outcome": "ok",
+            }
+        ]
         result = validate_trace(events)
         self.assertFalse(result.ok)
         self.assertTrue(any("details must be an object" in e for e in result.errors))

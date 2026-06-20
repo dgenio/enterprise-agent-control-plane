@@ -42,7 +42,9 @@ class TestGovernedPath(unittest.TestCase):
 
     # --- escalation gates its write instead of executing it -------------------
     def test_escalation_holds_gated_write_without_approval(self):
-        result = self.agent.run_case("escalate this ticket", "C-100", "INV-9", principal="support_agent")
+        result = self.agent.run_case(
+            "escalate this ticket", "C-100", "INV-9", principal="support_agent"
+        )
         self.assertEqual(result["intent"], "escalation")
         self.assertEqual(result["flow"], "escalation")
         # support.create_task is the gated risky action; with no approver it is held for
@@ -81,7 +83,11 @@ class TestGovernedPath(unittest.TestCase):
         # but NOT docs.search_policy or email.draft_reply, so those refund_review steps must
         # be blocked with no tool run (issue #111).
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="billing_admin")
-        steps = {e["details"]["step"]: e for e in result["trace"].as_dict()["events"] if e["action"] == "flow.step"}
+        steps = {
+            e["details"]["step"]: e
+            for e in result["trace"].as_dict()["events"]
+            if e["action"] == "flow.step"
+        }
         self.assertTrue(steps["lookup_customer"]["details"]["token_valid"])
         for blocked in ("check_policy", "draft_reply"):
             self.assertFalse(steps[blocked]["details"]["token_valid"])
@@ -92,7 +98,9 @@ class TestGovernedPath(unittest.TestCase):
     # --- policy provenance on decisions (issue #70) ---------------------------
     def test_policy_decision_records_provenance(self):
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
-        decision = next(e for e in result["trace"].as_dict()["events"] if e["action"] == "policy.decision")
+        decision = next(
+            e for e in result["trace"].as_dict()["events"] if e["action"] == "policy.decision"
+        )
         self.assertTrue(decision["details"]["policy_version"].startswith("af-"))
         self.assertEqual(decision["details"]["policy_thresholds"]["refund_auto_limit"], 50.0)
 
@@ -116,7 +124,13 @@ class TestGovernedPath(unittest.TestCase):
         result = self.agent.run_case("refund request", "C-100", "INV-9", principal="support_agent")
         trace = result["trace"]
         actions = [e["action"] for e in trace.as_dict()["events"]]
-        for expected in ("request.received", "shortlist", "flow.select", "policy.decision", "output.frame"):
+        for expected in (
+            "request.received",
+            "shortlist",
+            "flow.select",
+            "policy.decision",
+            "output.frame",
+        ):
             self.assertIn(expected, actions)
         # The completed run validates against the schema and its hash chain verifies
         # (issues #112, #39).

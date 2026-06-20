@@ -18,7 +18,9 @@ class TestBaselineVsGoverned(unittest.TestCase):
         self.assertEqual(result["raw_outputs"]["billing.issue_refund"]["status"], "issued")
 
     def test_governed_path_bounds_tools_and_writes_audit_trace(self):
-        result = GovernedAgent().run_case("refund request", "C-100", "INV-9", principal="support_agent")
+        result = GovernedAgent().run_case(
+            "refund request", "C-100", "INV-9", principal="support_agent"
+        )
         self.assertEqual(result["mode"], "governed")
         self.assertLess(len(result["visible_tools"]), 9)
         # The $149 refund is within the manager limit, so it is held for approval rather

@@ -18,8 +18,14 @@ class TestFlows(unittest.TestCase):
             "support.create_task": fake_tools.support_create_task,
         }
         runner = ChainWeaverExecutor(tools)
-        result = runner.run("refund_review", {"customer_id": "C-100", "invoice_id": "INV-9", "customer_name": "Ari Carter"})
-        self.assertEqual([s["step"] for s in result], ["lookup_customer", "lookup_invoice", "check_policy", "draft_reply"])
+        result = runner.run(
+            "refund_review",
+            {"customer_id": "C-100", "invoice_id": "INV-9", "customer_name": "Ari Carter"},
+        )
+        self.assertEqual(
+            [s["step"] for s in result],
+            ["lookup_customer", "lookup_invoice", "check_policy", "draft_reply"],
+        )
 
 
 if __name__ == "__main__":

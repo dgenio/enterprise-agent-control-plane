@@ -37,9 +37,13 @@ def print_workload(customer_id: str, invoice_id: str) -> dict[str, Any]:
         if writes:
             print(f"    RISK policy-blind write(s): {writes}")
         if not caps:
-            print("    RISK unbounded router stalled: no flow matched, the agent does nothing useful")
+            print(
+                "    RISK unbounded router stalled: no flow matched, the agent does nothing useful"
+            )
         if result["precondition_gaps"]:
-            print(f"    RISK execution-contract gaps: {len(result['precondition_gaps'])} (see [1e])")
+            print(
+                f"    RISK execution-contract gaps: {len(result['precondition_gaps'])} (see [1e])"
+            )
         if scenario.name == "refund":
             refund_result = result
     if not refund_result:
@@ -60,7 +64,9 @@ def print_refund_anatomy(baseline: dict[str, Any]) -> None:
     )
     print("Per-step routing (no bounded shortlist):")
     for step in baseline["steps"]:
-        print(f"  step {step['step']}: picked {step['capability']} (chose from {step['tools_offered']} tools)")
+        print(
+            f"  step {step['step']}: picked {step['capability']} (chose from {step['tools_offered']} tools)"
+        )
     print(f"RISK deterministic path run as model steps: {baseline['compilation_note']}")
     print(
         f"RISK per-step model round-trips: {baseline['model_decisions']} router decisions on a "
@@ -74,13 +80,19 @@ def print_refund_anatomy(baseline: dict[str, Any]) -> None:
 
     print("RISK cumulative context growth (full catalog re-sent + raw outputs retained):")
     for point in baseline["context_growth"]:
-        print(f"  after step {point['step']}: {point['cumulative_context_chars']} chars of model-visible context")
+        print(
+            f"  after step {point['step']}: {point['cumulative_context_chars']} chars of model-visible context"
+        )
     growth = baseline["context_growth"]
     if len(growth) >= 2:
         delta = growth[-1]["cumulative_context_chars"] - growth[0]["cumulative_context_chars"]
-        print(f"  -> context grew {delta} chars across the run; a bounded shortlist + Frame would flatten this")
+        print(
+            f"  -> context grew {delta} chars across the run; a bounded shortlist + Frame would flatten this"
+        )
 
-    print("RISK policy-blind write/destructive actions (no gate stood between intent and execution):")
+    print(
+        "RISK policy-blind write/destructive actions (no gate stood between intent and execution):"
+    )
     for write in baseline["policy_blind_writes"]:
         print(
             f"  {write['capability']}: principal={write['principal']} token={write['capability_token']} "
@@ -98,9 +110,13 @@ def print_refund_anatomy(baseline: dict[str, Any]) -> None:
 def print_eval_blind(customer_id: str, invoice_id: str) -> None:
     print("\n[1b] Router change shipped without offline evaluation")
     fake_tools.reset_state()
-    email_v1 = BaselineAgent(router=route_v1).run_case("send direct email reply", customer_id, invoice_id)
+    email_v1 = BaselineAgent(router=route_v1).run_case(
+        "send direct email reply", customer_id, invoice_id
+    )
     fake_tools.reset_state()
-    email_v2 = BaselineAgent(router=route_v2).run_case("send direct email reply", customer_id, invoice_id)
+    email_v2 = BaselineAgent(router=route_v2).run_case(
+        "send direct email reply", customer_id, invoice_id
+    )
     print(f"  v1 route: {[s['capability'] for s in email_v1['steps']]}")
     print(f"  v2 route: {[s['capability'] for s in email_v2['steps']]}")
     print(
@@ -131,12 +147,18 @@ def print_injection(customer_id: str, invoice_id: str) -> None:
     print("\n[1d] Indirect prompt injection via untrusted tool output")
     request = "review this customer's latest ticket"
     fake_tools.reset_state()
-    injected = BaselineAgent(router=route_injection_naive).run_case(request, customer_id, invoice_id)
+    injected = BaselineAgent(router=route_injection_naive).run_case(
+        request, customer_id, invoice_id
+    )
     caps = [s["capability"] for s in injected["steps"]]
     print(f"  request: {request!r} (a benign read; no write was authorized)")
     print(f"  route picked: {caps}")
     planted = next(
-        (t["agent_comments"] for t in fake_tools.TICKETS.get(customer_id, []) if "refund" in t["agent_comments"].lower()),
+        (
+            t["agent_comments"]
+            for t in fake_tools.TICKETS.get(customer_id, [])
+            if "refund" in t["agent_comments"].lower()
+        ),
         "",
     )
     print(f"  planted (untrusted) ticket text: {planted!r}")
@@ -164,7 +186,9 @@ def print_missing_contract(customer_id: str, invoice_id: str) -> None:
     agent = BaselineAgent(router=route_v1)
     agent.run_case("refund request", customer_id, invoice_id)
     agent.run_case("refund request", customer_id, invoice_id)
-    print(f"  running the same valid case twice -> {len(fake_tools.REFUNDS)} refunds recorded (no idempotency guard)")
+    print(
+        f"  running the same valid case twice -> {len(fake_tools.REFUNDS)} refunds recorded (no idempotency guard)"
+    )
 
 
 def print_lost_correction(customer_id: str, invoice_id: str) -> None:
@@ -174,7 +198,9 @@ def print_lost_correction(customer_id: str, invoice_id: str) -> None:
     agent = BaselineAgent(router=route_v1)
     run1 = agent.run_case("refund request", customer_id, invoice_id)
     status1 = run1["raw_outputs"]["billing.issue_refund"]["status"]
-    print(f"  run 1: refund {status1}; operator correction noted: 'this refund should have required approval'")
+    print(
+        f"  run 1: refund {status1}; operator correction noted: 'this refund should have required approval'"
+    )
     run2 = agent.run_case("refund request", customer_id, invoice_id)
     status2 = run2["raw_outputs"]["billing.issue_refund"]["status"]
     print(f"  run 2 (same case): refund {status2} again -- the correction was never captured")
@@ -190,7 +216,9 @@ def print_silent_failure(customer_id: str, invoice_id: str) -> None:
     fake_tools.reset_state()
     # An unknown customer on the email path: the lookup fails, but the agent drafts/sends
     # against placeholder data and the run reports no failure.
-    result = BaselineAgent(router=route_v1).run_case("send a direct email reply", "C-404", invoice_id)
+    result = BaselineAgent(router=route_v1).run_case(
+        "send a direct email reply", "C-404", invoice_id
+    )
     customer = result["raw_outputs"].get("crm.search_customer")
     print(f"  unknown customer 'C-404' -> crm.search_customer returned: {customer}")
     print(f"  steps still run: {[s['capability'] for s in result['steps']]}")
@@ -211,11 +239,19 @@ def print_exfiltration(customer_id: str, invoice_id: str) -> None:
     sent = fake_tools.SENT_EMAILS[-1] if fake_tools.SENT_EMAILS else {}
     print(f"  request: {request!r} (a benign read; no external send authorized)")
     print(f"  route picked: {[s['capability'] for s in result['steps']]}")
-    print(f"  email.send_reply -> to={sent.get('to')!r} (external address taken from injected [FAKE] data)")
+    print(
+        f"  email.send_reply -> to={sent.get('to')!r} (external address taken from injected [FAKE] data)"
+    )
     if "payment_method" in sent.get("body", ""):
-        print("  RISK no egress boundary: untrusted in-context data chose BOTH the destination AND the payload;")
-        print("    sensitive fields were available only because raw outputs were forwarded verbatim (#16),")
-        print("    and no policy decision stood before the send (#17). An AgentFence egress gate is the contrast.")
+        print(
+            "  RISK no egress boundary: untrusted in-context data chose BOTH the destination AND the payload;"
+        )
+        print(
+            "    sensitive fields were available only because raw outputs were forwarded verbatim (#16),"
+        )
+        print(
+            "    and no policy decision stood before the send (#17). An AgentFence egress gate is the contrast."
+        )
 
 
 def print_log_leakage(baseline: dict[str, Any]) -> None:
@@ -223,10 +259,13 @@ def print_log_leakage(baseline: dict[str, Any]) -> None:
     print("\n[1i] Sensitive fields leaking into the durable log surface (no redaction)")
     debug_lines = [line for line in baseline["logs"] if "[debug]" in line]
     present = sorted(
-        field for field in ("payment_method", "internal_notes", "risk_flags")
+        field
+        for field in ("payment_method", "internal_notes", "risk_flags")
         if any(field in line for line in debug_lines)
     )
-    print(f"  {len(debug_lines)} raw-payload [debug] log line(s) carry sensitive-looking fields: {present}")
+    print(
+        f"  {len(debug_lines)} raw-payload [debug] log line(s) carry sensitive-looking fields: {present}"
+    )
     print(
         "  RISK these persist into traces/unsafe_run.json verbatim -- a second exposure beyond "
         "model context (#16) that outlives the run and could ship to log aggregation. A bounded "
@@ -265,11 +304,15 @@ def print_contrast() -> None:
     print(f"  {'dimension'.ljust(width)} | {'baseline':>10} | {'governed':>10}")
     print(f"  {'-' * width} | {'-' * 10} | {'-' * 10}")
     for row in rows:
-        print(f"  {row['dimension'].ljust(width)} | {str(row['baseline']):>10} | {str(row['governed']):>10}")
+        print(
+            f"  {row['dimension'].ljust(width)} | {str(row['baseline']):>10} | {str(row['governed']):>10}"
+        )
     gated = scorecard["gated_action"]
     print(f"  gated action: {gated['capability']} -> {gated['outcome']}")
     paths = comparison.save_scorecard(scorecard)
-    print(f"  scorecard artifact: {paths['json']} + {paths['markdown']} (numbers derived from the runs)")
+    print(
+        f"  scorecard artifact: {paths['json']} + {paths['markdown']} (numbers derived from the runs)"
+    )
 
 
 def main() -> None:
@@ -301,7 +344,9 @@ def main() -> None:
             f"Context firewall (#24): model-visible shortlist = {metric['shortlist_chars']} chars "
             f"vs full catalog {metric['full_catalog_chars']} chars ({metric['reduction_pct']}% smaller)"
         )
-    print(f"Enforced capability budget (#110): {len(governed['visible_tools'])} -> {governed['visible_tools']}")
+    print(
+        f"Enforced capability budget (#110): {len(governed['visible_tools'])} -> {governed['visible_tools']}"
+    )
     print(f"Deterministic flow steps: {governed['bounded_output']['flow_steps']}")
     if governed["frames"]:
         first = governed["frames"][0]
@@ -319,7 +364,9 @@ def main() -> None:
     print(f"Audit trace emitted: {governed['audit_trace_path']}")
 
     export = agent.export_case(governed["trace"], principal="support_manager")
-    print(f"Explainable case bundle exported: {export['bundle_path']} (decision: {export['decision']['outcome']})")
+    print(
+        f"Explainable case bundle exported: {export['bundle_path']} (decision: {export['decision']['outcome']})"
+    )
 
     print_frame_expansion(agent, governed)
 
@@ -327,7 +374,9 @@ def main() -> None:
     fake_tools.reset_state()
     scenario = agent.run_decision_scenario(principal="support_agent")
     for d in scenario["decisions"]:
-        print(f"  {d['capability']} ({d['action_class']}): decision={d['decision']} -> outcome={d['outcome']}")
+        print(
+            f"  {d['capability']} ({d['action_class']}): decision={d['decision']} -> outcome={d['outcome']}"
+        )
         print(f"    reason: {d['reason']}")
 
     print("\n[2c] Approval handling for 'ask' decisions (injectable approver)")
@@ -362,7 +411,9 @@ def print_execution_contract(customer_id: str, invoice_id: str) -> None:
     two_write = GovernedAgent().run_case("refund and notify the customer", customer_id, invoice_id)
     print("  gate every write a flow touches (#66):")
     for action in two_write["bounded_output"]["gated_actions"]:
-        print(f"    {action['capability']} -> {action['action_status']} (commit: {action['commit_mode']})")
+        print(
+            f"    {action['capability']} -> {action['action_status']} (commit: {action['commit_mode']})"
+        )
 
     # #41 — a not-found dependency halts the flow before any write.
     fake_tools.reset_state()
@@ -385,9 +436,9 @@ def print_execution_contract(customer_id: str, invoice_id: str) -> None:
 
     # #64 — self-approval is rejected even with an approver that would say yes.
     fake_tools.reset_state()
-    self_approved = GovernedAgent(approver=lambda req: True, approver_principal="support_agent").run_case(
-        "refund request", customer_id, invoice_id, principal="support_agent"
-    )
+    self_approved = GovernedAgent(
+        approver=lambda req: True, approver_principal="support_agent"
+    ).run_case("refund request", customer_id, invoice_id, principal="support_agent")
     print(
         f"  separation of duties (#64): support_agent self-approval -> "
         f"{self_approved['bounded_output']['action_status']}"
@@ -468,7 +519,9 @@ def print_jit_tokens(customer_id: str, invoice_id: str) -> None:
     """Just-in-time, case-scoped capability tokens vs a standing role grant (#63)."""
     print("\n[2h] Just-in-time, case-scoped capability tokens")
     fake_tools.reset_state()
-    governed = GovernedAgent().run_case("refund request", customer_id, invoice_id, principal="support_agent")
+    governed = GovernedAgent().run_case(
+        "refund request", customer_id, invoice_id, principal="support_agent"
+    )
     shortlist = next(e for e in governed["trace"].as_dict()["events"] if e["action"] == "shortlist")
     details = shortlist["details"]
     standing = sorted(token.capability for token in issue_tokens("support_agent"))
@@ -492,10 +545,14 @@ def print_lesson_loop(customer_id: str, invoice_id: str) -> None:
     # A concrete failed/fail-closed trace as the lesson's evidence (#6): the governed path
     # halts on a not-found invoice. Capture that trace as the sample failure artifact.
     fake_tools.reset_state()
-    halted = GovernedAgent().run_case("refund request", "C-404", "INV-404", principal="support_agent")
+    halted = GovernedAgent().run_case(
+        "refund request", "C-404", "INV-404", principal="support_agent"
+    )
     failed_trace_path = lessons_dir / "failed_trace.json"
     failed_trace_path.write_text(json.dumps(halted["trace"].as_dict(), indent=2), encoding="utf-8")
-    print(f"  sample failed trace captured: {failed_trace_path} (status={halted['bounded_output']['status']})")
+    print(
+        f"  sample failed trace captured: {failed_trace_path} (status={halted['bounded_output']['status']})"
+    )
 
     # Stage a candidate lesson from a recurring operator correction (the baseline's lost
     # correction, #34): small refunds were auto-approved that should have required review.
