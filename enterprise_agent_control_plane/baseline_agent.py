@@ -91,7 +91,9 @@ class BaselineAgent:
 
             # Audit-light: the log names the tool but not the principal, the exact
             # arguments, the returned payload, or any policy decision (issue #19).
-            logs.append(f"[baseline] step {len(steps) + 1}: model picked {capability} from {tools_offered} tools")
+            logs.append(
+                f"[baseline] step {len(steps) + 1}: model picked {capability} from {tools_offered} tools"
+            )
 
             output = self._invoke(capability, customer_id, invoice_id, raw_outputs)
 
@@ -103,7 +105,9 @@ class BaselineAgent:
             # troubleshooting -- so the same sensitive-looking fields land in a DURABLE log
             # surface verbatim, a second exposure beyond model context that outlives the run
             # and gets persisted into traces/unsafe_run.json with no redaction (issue #106).
-            logs.append(f"[baseline][debug] {capability} returned {json.dumps(output, default=str)}")
+            logs.append(
+                f"[baseline][debug] {capability} returned {json.dumps(output, default=str)}"
+            )
 
             # Cumulative model-visible context grows every step: the whole catalog is
             # re-offered AND every raw output is retained (issue #42). ``context_chars``
@@ -179,7 +183,9 @@ class BaselineAgent:
         # contract; the sharper *destructive* instance (a refund on a not-found invoice) is
         # the separate #32 case recorded in ``precondition_gaps`` above.
         silent_failures: list[str] = []
-        if isinstance(raw_outputs.get("crm.search_customer"), dict) and raw_outputs["crm.search_customer"].get("error"):
+        if isinstance(raw_outputs.get("crm.search_customer"), dict) and raw_outputs[
+            "crm.search_customer"
+        ].get("error"):
             failed_read = raw_outputs["crm.search_customer"]["error"]
             for downstream in ("email.draft_reply", "email.send_reply"):
                 if downstream in raw_outputs:
@@ -198,7 +204,7 @@ class BaselineAgent:
         return {
             "mode": "unsafe",
             "request": request,
-            "router": self.router.__name__,
+            "router": getattr(self.router, "__name__", type(self.router).__name__),
             "tools_offered_each_step": tools_offered,
             "full_catalog_context_chars": size["chars"],
             "approx_context_tokens": size["approx_tokens"],
@@ -238,7 +244,9 @@ class BaselineAgent:
             ],
         }
 
-    def _invoke(self, capability: str, customer_id: str, invoice_id: str, raw_outputs: dict[str, Any]) -> Any:
+    def _invoke(
+        self, capability: str, customer_id: str, invoice_id: str, raw_outputs: dict[str, Any]
+    ) -> Any:
         tool = self.tools[capability]
         customer = raw_outputs.get("crm.search_customer", {})
         invoice = raw_outputs.get("billing.get_invoice", {})
@@ -267,7 +275,11 @@ class BaselineAgent:
                 leaked = _sensitive_context_fields(raw_outputs)
                 body = "Account details: " + json.dumps(leaked, default=str)
                 return tool(exfil_to, "Re: your request", body)
-            to = customer.get("email", "unknown@example.com") if isinstance(customer, dict) else "unknown@example.com"
+            to = (
+                customer.get("email", "unknown@example.com")
+                if isinstance(customer, dict)
+                else "unknown@example.com"
+            )
             return tool(to, "Re: your request", "We have processed your request.")
         if capability == "docs.search_policy":
             return tool("refund")

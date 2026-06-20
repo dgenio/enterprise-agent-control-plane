@@ -1,14 +1,20 @@
 import hashlib
 import json
+from collections.abc import Callable, Iterable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterable, Optional
+from typing import Any, Optional
 
-from .audit import AuditTrace
-from .catalog import build_catalog, build_tool_definitions, context_reduction, shortlist_capabilities
-from .frames import Frame, FrameStore, field_names
 from . import fake_tools
-from .flows import ChainWeaverExecutor, FLOW_REGISTRY, select_flow
+from .audit import AuditTrace
+from .catalog import (
+    build_catalog,
+    build_tool_definitions,
+    context_reduction,
+    shortlist_capabilities,
+)
+from .flows import FLOW_REGISTRY, ChainWeaverExecutor, select_flow
+from .frames import Frame, FrameStore, field_names
 from .policies import (
     ACTION_CLASSES,
     CASE_TOKEN_TTL_SECONDS,
@@ -47,9 +53,9 @@ class GovernedDecision:
 
     capability: str
     principal: str
-    action_class: Optional[str]
-    decision: str   # raw policy decision: allow / ask / deny
-    outcome: str    # allowed / approved / approval_required / approval_denied / denied
+    action_class: str | None
+    decision: str  # raw policy decision: allow / ask / deny
+    outcome: str  # allowed / approved / approval_required / approval_denied / denied
     reason: str
     token_valid: bool
 
@@ -60,8 +66,8 @@ class GovernedDecision:
 class GovernedAgent:
     def __init__(
         self,
-        policy: Optional[AgentFencePolicy] = None,
-        approver: Optional[Approver] = None,
+        policy: AgentFencePolicy | None = None,
+        approver: Approver | None = None,
         approver_principal: str = "support_manager",
     ):
         self.catalog = build_catalog()
@@ -85,12 +91,12 @@ class GovernedAgent:
         self,
         capability: str,
         principal: str,
-        args: Optional[dict[str, Any]] = None,
-        trace: Optional[AuditTrace] = None,
+        args: dict[str, Any] | None = None,
+        trace: AuditTrace | None = None,
         approver: Any = _USE_DEFAULT,
         approver_principal: Any = _USE_DEFAULT,
-        tokens: Optional[Iterable[CapabilityToken]] = None,
-        scope: Optional[str] = None,
+        tokens: Iterable[CapabilityToken] | None = None,
+        scope: str | None = None,
     ) -> GovernedDecision:
         """Gate one capability: token check (issue #23) -> policy (issues #2/#36) ->
         approval routing for 'ask' (issue #5/#64). Records an explainable trace event (#27).
@@ -113,11 +119,18 @@ class GovernedAgent:
         tokens = list(tokens) if tokens is not None else issue_tokens(principal)
         if not holds_capability(tokens, capability, scope=scope):
             decision = GovernedDecision(
-                capability, principal, ACTION_CLASSES.get(capability), "deny", "denied",
-                f"{principal} holds no valid capability token for {capability}.", False,
+                capability,
+                principal,
+                ACTION_CLASSES.get(capability),
+                "deny",
+                "denied",
+                f"{principal} holds no valid capability token for {capability}.",
+                False,
             )
             if trace is not None:
-                trace.record(principal, "policy.decision", "denied", self._policy_event_details(decision))
+                trace.record(
+                    principal, "policy.decision", "denied", self._policy_event_details(decision)
+                )
             return decision
 
         policy_decision = self.policy.evaluate(capability, principal, args)
@@ -125,11 +138,18 @@ class GovernedAgent:
             policy_decision, principal, capability, args, approver, approver_principal, trace
         )
         decision = GovernedDecision(
-            capability, principal, policy_decision.action_class,
-            policy_decision.decision, outcome, reason, True,
+            capability,
+            principal,
+            policy_decision.action_class,
+            policy_decision.decision,
+            outcome,
+            reason,
+            True,
         )
         if trace is not None:
-            trace.record(principal, "policy.decision", outcome, self._policy_event_details(decision))
+            trace.record(
+                principal, "policy.decision", outcome, self._policy_event_details(decision)
+            )
         return decision
 
     def _policy_event_details(self, decision: GovernedDecision) -> dict[str, Any]:
@@ -142,7 +162,7 @@ class GovernedAgent:
         }
 
     @staticmethod
-    def _result_ref(record: dict[str, Any]) -> Optional[str]:
+    def _result_ref(record: dict[str, Any]) -> str | None:
         """A bounded reference to a step's output -- a content digest, not the raw payload.
 
         Keeping a short hash rather than the raw output in the trace means a per-step event
@@ -160,9 +180,9 @@ class GovernedAgent:
         principal: str,
         capability: str,
         args: dict[str, Any],
-        approver: Optional[Approver],
-        approver_principal: Optional[str],
-        trace: Optional[AuditTrace],
+        approver: Approver | None,
+        approver_principal: str | None,
+        trace: AuditTrace | None,
     ) -> "tuple[str, str]":
         if policy_decision.decision == "allow":
             return "allowed", policy_decision.reason
@@ -172,9 +192,16 @@ class GovernedAgent:
         # 'ask' routes through the approval step (issue #5).
         if approver is None:
             if trace is not None:
-                trace.record(principal, "approval.request", "pending",
-                             {"capability": capability, "reason": policy_decision.reason})
-            return "approval_required", policy_decision.reason + " No approver configured; left pending."
+                trace.record(
+                    principal,
+                    "approval.request",
+                    "pending",
+                    {"capability": capability, "reason": policy_decision.reason},
+                )
+            return (
+                "approval_required",
+                policy_decision.reason + " No approver configured; left pending.",
+            )
 
         # Separation of duties (issue #64): the approver must be a different, authorized
         # principal. A self-approval or an approver without authority for this action class is
@@ -185,32 +212,57 @@ class GovernedAgent:
                 + f" Rejected: {principal} cannot approve their own {capability} (self-approval)."
             )
             if trace is not None:
-                trace.record(principal, "approval.resolved", "denied",
-                             {"capability": capability, "approver": approver_principal,
-                              "authority_basis": "self_approval_rejected"})
+                trace.record(
+                    principal,
+                    "approval.resolved",
+                    "denied",
+                    {
+                        "capability": capability,
+                        "approver": approver_principal,
+                        "authority_basis": "self_approval_rejected",
+                    },
+                )
             return "approval_denied", reason
-        if not may_approve(approver_principal, policy_decision.action_class):
+        if not may_approve(approver_principal or "", policy_decision.action_class):
             reason = (
                 policy_decision.reason
                 + f" Rejected: {approver_principal} is not authorized to approve "
                 f"{policy_decision.action_class} actions."
             )
             if trace is not None:
-                trace.record(principal, "approval.resolved", "denied",
-                             {"capability": capability, "approver": approver_principal,
-                              "authority_basis": "unauthorized_approver"})
+                trace.record(
+                    principal,
+                    "approval.resolved",
+                    "denied",
+                    {
+                        "capability": capability,
+                        "approver": approver_principal,
+                        "authority_basis": "unauthorized_approver",
+                    },
+                )
             return "approval_denied", reason
 
         if trace is not None:
-            trace.record(principal, "approval.request", "requested",
-                         {"capability": capability, "reason": policy_decision.reason})
+            trace.record(
+                principal,
+                "approval.request",
+                "requested",
+                {"capability": capability, "reason": policy_decision.reason},
+            )
         approved = approver(ApprovalRequest(principal, capability, policy_decision.reason, args))
         resolution = "approved" if approved else "denied"
         authority_basis = f"{approver_principal} authorized for {policy_decision.action_class}"
         if trace is not None:
-            trace.record(principal, "approval.resolved", resolution,
-                         {"capability": capability, "approver": approver_principal,
-                          "authority_basis": authority_basis})
+            trace.record(
+                principal,
+                "approval.resolved",
+                resolution,
+                {
+                    "capability": capability,
+                    "approver": approver_principal,
+                    "authority_basis": authority_basis,
+                },
+            )
         if approved:
             return "approved", policy_decision.reason + f" Approved by {approver_principal}."
         return "approval_denied", policy_decision.reason + f" Rejected by {approver_principal}."
@@ -240,17 +292,27 @@ class GovernedAgent:
         trace = AuditTrace(trace_id=f"trace-{customer_id}-{invoice_id}")
 
         intent, flow_id = select_flow(request)
-        trace.record(principal, "request.received", "ok",
-                     {"request": request, "intent": intent, "principal": principal})
+        trace.record(
+            principal,
+            "request.received",
+            "ok",
+            {"request": request, "intent": intent, "principal": principal},
+        )
 
         if flow_id is None:
             # Unknown/unsupported intent: explicit no-match, no silent default (issue #25).
-            trace.record(principal, "flow.select", "no_match",
-                         {"intent": intent, "reason": "no governed flow registered for this request"})
+            trace.record(
+                principal,
+                "flow.select",
+                "no_match",
+                {"intent": intent, "reason": "no governed flow registered for this request"},
+            )
             # Mirror the matched-flow frame's key set so consumers can index a stable
             # bounded_output schema regardless of whether a flow matched (issue #25).
-            frame = {
-                "request": request, "intent": intent, "flow": None,
+            frame: dict[str, Any] = {
+                "request": request,
+                "intent": intent,
+                "flow": None,
                 "status": "no_matching_flow",
                 "flow_steps": [],
                 "gated_capability": None,
@@ -263,10 +325,18 @@ class GovernedAgent:
             trace.record(principal, "output.frame", "no_match", frame)
             path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
-                "mode": "governed", "request": request, "intent": intent, "flow": None,
-                "visible_tools": [], "decision": None, "decisions": [], "bounded_output": frame,
-                "frames": [], "context_metric": None,
-                "audit_trace_path": str(path), "trace": trace,
+                "mode": "governed",
+                "request": request,
+                "intent": intent,
+                "flow": None,
+                "visible_tools": [],
+                "decision": None,
+                "decisions": [],
+                "bounded_output": frame,
+                "frames": [],
+                "context_metric": None,
+                "audit_trace_path": str(path),
+                "trace": trace,
             }
 
         # Bounded shortlist; the why is recorded so the trace is explainable (issue #27). The
@@ -300,21 +370,33 @@ class GovernedAgent:
         needed_caps = flow_caps | set(flow.gated_capabilities)
         case_tokens = issue_case_tokens(principal, needed_caps, scope=trace.trace_id)
 
-        trace.record(principal, "shortlist", "ok", {
-            "capabilities": [c.capability for c in shortlist],
-            "reason": f"keyword shortlist for intent {intent!r}; full catalog kept out of model context",
-            "budget": sorted(budget),
-            "context_metric": context_metric,
-            # Case-scoped token provenance (issue #63): which capabilities were granted just
-            # for this case, the scope they are bound to, and their TTL.
-            "case_tokens": [t.capability for t in case_tokens],
-            "case_token_scope": trace.trace_id,
-            "case_token_ttl_seconds": CASE_TOKEN_TTL_SECONDS,
-        })
+        trace.record(
+            principal,
+            "shortlist",
+            "ok",
+            {
+                "capabilities": [c.capability for c in shortlist],
+                "reason": f"keyword shortlist for intent {intent!r}; full catalog kept out of model context",
+                "budget": sorted(budget),
+                "context_metric": context_metric,
+                # Case-scoped token provenance (issue #63): which capabilities were granted just
+                # for this case, the scope they are bound to, and their TTL.
+                "case_tokens": [t.capability for t in case_tokens],
+                "case_token_scope": trace.trace_id,
+                "case_token_ttl_seconds": CASE_TOKEN_TTL_SECONDS,
+            },
+        )
 
-        trace.record(principal, "flow.select", "ok",
-                     {"intent": intent, "flow_id": flow_id,
-                      "reason": f"intent {intent!r} maps to deterministic flow {flow_id!r}"})
+        trace.record(
+            principal,
+            "flow.select",
+            "ok",
+            {
+                "intent": intent,
+                "flow_id": flow_id,
+                "reason": f"intent {intent!r} maps to deterministic flow {flow_id!r}",
+            },
+        )
 
         # Each flow step is token-checked and recorded as its own audit event so the trace
         # explains the run step-by-step, and read steps are subject to the same
@@ -323,15 +405,26 @@ class GovernedAgent:
         tokens = case_tokens
 
         def _on_step(record: dict[str, Any]) -> None:
-            outcome = {"ok": "ok", "blocked_no_token": "blocked_no_token"}.get(record["status"], record["status"])
-            trace.record(principal, "flow.step", outcome, {
-                "step": record["step"],
-                "capability": record["capability"],
-                "token_valid": record["token_valid"],
-                "result_ref": self._result_ref(record),
-            })
+            outcome = {"ok": "ok", "blocked_no_token": "blocked_no_token"}.get(
+                record["status"], record["status"]
+            )
+            trace.record(
+                principal,
+                "flow.step",
+                outcome,
+                {
+                    "step": record["step"],
+                    "capability": record["capability"],
+                    "token_valid": record["token_valid"],
+                    "result_ref": self._result_ref(record),
+                },
+            )
 
-        payload = {"customer_id": customer_id, "invoice_id": invoice_id, "customer_name": "Ari Carter"}
+        payload = {
+            "customer_id": customer_id,
+            "invoice_id": invoice_id,
+            "customer_name": "Ari Carter",
+        }
         flow_results = self.executor.run(
             flow_id,
             payload,
@@ -340,8 +433,16 @@ class GovernedAgent:
             budget=budget,
         )
         executed = [r for r in flow_results if r["status"] == "ok"]
-        trace.record(principal, "flow.execute", "ok",
-                     {"flow_id": flow_id, "steps": len(executed), "blocked": len(flow_results) - len(executed)})
+        trace.record(
+            principal,
+            "flow.execute",
+            "ok",
+            {
+                "flow_id": flow_id,
+                "steps": len(executed),
+                "blocked": len(flow_results) - len(executed),
+            },
+        )
 
         # Wrap each executed step's raw output in a bounded Frame (issues #22/#37): the raw
         # payload is stashed behind an opaque handle in the frame store, sensitive fields are
@@ -362,10 +463,20 @@ class GovernedAgent:
                 )
             else:
                 reason = f"step {failed_step['step']!r} ({failed_step['capability']}) failed; flow halted before any write."
-            trace.record(principal, "flow.halt", "halted",
-                         {"step": failed_step["step"], "capability": failed_step["capability"], "reason": reason})
+            trace.record(
+                principal,
+                "flow.halt",
+                "halted",
+                {
+                    "step": failed_step["step"],
+                    "capability": failed_step["capability"],
+                    "reason": reason,
+                },
+            )
             frame = {
-                "request": request, "intent": intent, "flow": flow_id,
+                "request": request,
+                "intent": intent,
+                "flow": flow_id,
                 "status": "halted",
                 "flow_steps": [r["step"] for r in flow_results],
                 "gated_capability": None,
@@ -378,11 +489,18 @@ class GovernedAgent:
             trace.record(principal, "output.frame", "halted", frame)
             path = self._save_trace(trace, customer_id, invoice_id, intent)
             return {
-                "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
-                "visible_tools": visible_tools, "decision": None, "decisions": [],
-                "bounded_output": frame, "frames": [f.as_dict() for f in frames],
+                "mode": "governed",
+                "request": request,
+                "intent": intent,
+                "flow": flow_id,
+                "visible_tools": visible_tools,
+                "decision": None,
+                "decisions": [],
+                "bounded_output": frame,
+                "frames": [f.as_dict() for f in frames],
                 "context_metric": context_metric,
-                "audit_trace_path": str(path), "trace": trace,
+                "audit_trace_path": str(path),
+                "trace": trace,
             }
 
         # Gate EVERY write/destructive capability the flow performs, not one hardcoded action
@@ -393,24 +511,35 @@ class GovernedAgent:
         for capability in FLOW_REGISTRY[flow_id].gated_capabilities:
             gate_args = self._gate_args(capability, flow_results)
             decision = self.decide(
-                capability, principal, gate_args, trace=trace,
-                approver=approver, approver_principal=approver_principal,
-                tokens=case_tokens, scope=trace.trace_id,
+                capability,
+                principal,
+                gate_args,
+                trace=trace,
+                approver=approver,
+                approver_principal=approver_principal,
+                tokens=case_tokens,
+                scope=trace.trace_id,
             )
-            commit_mode = self._settle_write(capability, decision, trace, principal, payload, flow_results)
+            commit_mode = self._settle_write(
+                capability, decision, trace, principal, payload, flow_results
+            )
             decisions.append(decision)
-            gated_actions.append({
-                "capability": capability,
-                "action_status": decision.outcome,
-                "action_class": decision.action_class,
-                "decision_reason": decision.reason,
-                "capability_token_valid": decision.token_valid,
-                "commit_mode": commit_mode,
-            })
+            gated_actions.append(
+                {
+                    "capability": capability,
+                    "action_status": decision.outcome,
+                    "action_class": decision.action_class,
+                    "decision_reason": decision.reason,
+                    "capability_token_valid": decision.token_valid,
+                    "commit_mode": commit_mode,
+                }
+            )
 
         primary = gated_actions[0] if gated_actions else None
         frame = {
-            "request": request, "intent": intent, "flow": flow_id,
+            "request": request,
+            "intent": intent,
+            "flow": flow_id,
             "status": "ok",
             "flow_steps": [r["step"] for r in flow_results],
             # Singular fields describe the primary gated action (the first the flow performs)
@@ -426,23 +555,30 @@ class GovernedAgent:
 
         path = self._save_trace(trace, customer_id, invoice_id, intent)
         return {
-            "mode": "governed", "request": request, "intent": intent, "flow": flow_id,
+            "mode": "governed",
+            "request": request,
+            "intent": intent,
+            "flow": flow_id,
             "visible_tools": visible_tools,
             "decision": decisions[0].as_dict() if decisions else None,
             "decisions": [d.as_dict() for d in decisions],
-            "bounded_output": frame, "frames": [f.as_dict() for f in frames],
+            "bounded_output": frame,
+            "frames": [f.as_dict() for f in frames],
             "context_metric": context_metric,
-            "audit_trace_path": str(path), "trace": trace,
+            "audit_trace_path": str(path),
+            "trace": trace,
         }
 
     @staticmethod
-    def _invoice_amount(flow_results: list[dict[str, Any]]) -> Optional[float]:
+    def _invoice_amount(flow_results: list[dict[str, Any]]) -> float | None:
         """The refund amount from the flow's ``billing.get_invoice`` step, or ``None``.
 
         Shared by the gate-args builder and the write invocation so the decision and the
         committed side effect read the amount from one place (issue #36/#66).
         """
-        invoice = next((r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {})
+        invoice: Any = next(
+            (r["output"] for r in flow_results if r["capability"] == "billing.get_invoice"), {}
+        )
         return invoice.get("amount") if isinstance(invoice, dict) else None
 
     @staticmethod
@@ -471,23 +607,44 @@ class GovernedAgent:
         if decision.outcome not in _COMMITTABLE_OUTCOMES:
             # Not cleared to act: exercise the tool's dry-run path so nothing mutates.
             self._invoke_write(capability, payload, flow_results, commit=False)
-            trace.record(principal, "action.commit", "dry_run",
-                         {"capability": capability, "mode": "dry_run",
-                          "reason": f"outcome {decision.outcome!r} is not committable; no side effect."})
+            trace.record(
+                principal,
+                "action.commit",
+                "dry_run",
+                {
+                    "capability": capability,
+                    "mode": "dry_run",
+                    "reason": f"outcome {decision.outcome!r} is not committable; no side effect.",
+                },
+            )
             return "dry_run"
 
         key = (trace.trace_id, capability)
         if key in self._committed:
-            trace.record(principal, "action.commit", "replay",
-                         {"capability": capability, "mode": "replay",
-                          "reason": f"{capability} already committed for case {trace.trace_id!r}; replay is a no-op."})
+            trace.record(
+                principal,
+                "action.commit",
+                "replay",
+                {
+                    "capability": capability,
+                    "mode": "replay",
+                    "reason": f"{capability} already committed for case {trace.trace_id!r}; replay is a no-op.",
+                },
+            )
             return "replay"
 
         self._invoke_write(capability, payload, flow_results, commit=True)
         self._committed.add(key)
-        trace.record(principal, "action.commit", "committed",
-                     {"capability": capability, "mode": "committed",
-                      "reason": f"outcome {decision.outcome!r}; side effect committed once for case {trace.trace_id!r}."})
+        trace.record(
+            principal,
+            "action.commit",
+            "committed",
+            {
+                "capability": capability,
+                "mode": "committed",
+                "reason": f"outcome {decision.outcome!r}; side effect committed once for case {trace.trace_id!r}.",
+            },
+        )
         return "committed"
 
     def _invoke_write(
@@ -500,14 +657,26 @@ class GovernedAgent:
         """Invoke a gated write tool in dry-run or commit mode (issue #38)."""
         if capability == "billing.issue_refund":
             amount = self._invoice_amount(flow_results) or 0.0
-            return self.tools[capability](payload["invoice_id"], amount, "governed refund", commit=commit)
+            return self.tools[capability](
+                payload["invoice_id"], amount, "governed refund", commit=commit
+            )
         if capability == "email.send_reply":
-            draft = next((r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {})
-            subject = draft.get("subject", "Update on your request") if isinstance(draft, dict) else "Update"
+            draft: Any = next(
+                (r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {}
+            )
+            subject = (
+                draft.get("subject", "Update on your request")
+                if isinstance(draft, dict)
+                else "Update"
+            )
             body = draft.get("body", "") if isinstance(draft, dict) else ""
-            return self.tools[capability]("[FAKE] customer@example.com", subject, body, commit=commit)
+            return self.tools[capability](
+                "[FAKE] customer@example.com", subject, body, commit=commit
+            )
         if capability == "support.create_task":
-            return self.tools[capability](payload["customer_id"], "Escalated by governed flow", commit=commit)
+            return self.tools[capability](
+                payload["customer_id"], "Escalated by governed flow", commit=commit
+            )
         return {"error": "unknown_write", "capability": capability}
 
     def run_decision_scenario(
@@ -521,11 +690,16 @@ class GovernedAgent:
         approver = self.approver if approver is _USE_DEFAULT else approver
         trace = AuditTrace(trace_id=f"decisions-{principal}")
         cases = [
-            ("crm.search_customer", {}),                  # read -> allowed
-            ("audit.export_case", {}),                    # restricted -> denied for support_agent
-            ("billing.issue_refund", {"amount": 149.0}),  # within manager limit -> approval-required
+            ("crm.search_customer", {}),  # read -> allowed
+            ("audit.export_case", {}),  # restricted -> denied for support_agent
+            (
+                "billing.issue_refund",
+                {"amount": 149.0},
+            ),  # within manager limit -> approval-required
         ]
-        decisions = [self.decide(cap, principal, args, trace=trace, approver=approver) for cap, args in cases]
+        decisions = [
+            self.decide(cap, principal, args, trace=trace, approver=approver) for cap, args in cases
+        ]
         path = Path("traces") / f"decisions_{principal}.json"
         trace.save(path)
         return {
@@ -576,21 +750,26 @@ class GovernedAgent:
                 sensitive_fields=sensitive_fields(capability),
             )
             frames.append(frame)
-            trace.record(principal, "flow.frame", "ok", {
-                "capability": capability,
-                "handle": frame.handle,
-                "redacted_fields": frame.redacted_fields,
-                "summary": frame.summary,
-                "risk": frame.risk,
-                "untrusted": frame.untrusted,
-            })
+            trace.record(
+                principal,
+                "flow.frame",
+                "ok",
+                {
+                    "capability": capability,
+                    "handle": frame.handle,
+                    "redacted_fields": frame.redacted_fields,
+                    "summary": frame.summary,
+                    "risk": frame.risk,
+                    "untrusted": frame.untrusted,
+                },
+            )
         return frames
 
     def expand_frame(
         self,
         handle: str,
         principal: str,
-        trace: Optional[AuditTrace] = None,
+        trace: AuditTrace | None = None,
     ) -> dict[str, Any]:
         """Reveal a Frame's redacted raw detail as a gated, audited capability (issue #114).
 
@@ -603,35 +782,70 @@ class GovernedAgent:
         decision = self.decide("frame.expand", principal, {"handle": handle}, trace=trace)
         if decision.outcome not in _COMMITTABLE_OUTCOMES:
             if trace is not None:
-                trace.record(principal, "frame.expand", "denied", {
-                    "handle": handle, "outcome": decision.outcome,
-                    "revealed_fields": [], "reason": decision.reason,
-                })
-            return {"handle": handle, "outcome": decision.outcome, "revealed": None,
-                    "revealed_fields": [], "decision": decision.as_dict()}
+                trace.record(
+                    principal,
+                    "frame.expand",
+                    "denied",
+                    {
+                        "handle": handle,
+                        "outcome": decision.outcome,
+                        "revealed_fields": [],
+                        "reason": decision.reason,
+                    },
+                )
+            return {
+                "handle": handle,
+                "outcome": decision.outcome,
+                "revealed": None,
+                "revealed_fields": [],
+                "decision": decision.as_dict(),
+            }
 
         if not self.frame_store.has(handle):
             if trace is not None:
-                trace.record(principal, "frame.expand", "not_found", {
-                    "handle": handle, "outcome": decision.outcome,
-                    "revealed_fields": [], "reason": "no such frame handle in the current case",
-                })
-            return {"handle": handle, "outcome": decision.outcome, "revealed": None,
-                    "revealed_fields": [], "decision": decision.as_dict()}
+                trace.record(
+                    principal,
+                    "frame.expand",
+                    "not_found",
+                    {
+                        "handle": handle,
+                        "outcome": decision.outcome,
+                        "revealed_fields": [],
+                        "reason": "no such frame handle in the current case",
+                    },
+                )
+            return {
+                "handle": handle,
+                "outcome": decision.outcome,
+                "revealed": None,
+                "revealed_fields": [],
+                "decision": decision.as_dict(),
+            }
 
         raw = self.frame_store.expand(handle)
         revealed_fields = sorted(field_names(raw))
         if trace is not None:
-            trace.record(principal, "frame.expand", "revealed", {
-                "handle": handle, "outcome": decision.outcome,
-                "revealed_fields": revealed_fields,
-                "reason": f"{principal} authorized to reveal raw detail behind {handle}.",
-            })
-        return {"handle": handle, "outcome": decision.outcome, "revealed": raw,
-                "revealed_fields": revealed_fields, "decision": decision.as_dict()}
+            trace.record(
+                principal,
+                "frame.expand",
+                "revealed",
+                {
+                    "handle": handle,
+                    "outcome": decision.outcome,
+                    "revealed_fields": revealed_fields,
+                    "reason": f"{principal} authorized to reveal raw detail behind {handle}.",
+                },
+            )
+        return {
+            "handle": handle,
+            "outcome": decision.outcome,
+            "revealed": raw,
+            "revealed_fields": revealed_fields,
+            "decision": decision.as_dict(),
+        }
 
     def _save_trace(
-        self, trace: AuditTrace, customer_id: str, invoice_id: str, intent: str
+        self, trace: AuditTrace, customer_id: str, invoice_id: str, intent: str | None
     ) -> Path:
         # Include the resolved intent so cases that share a customer/invoice id (e.g. the
         # shared-id WORKLOAD scenarios run by the demo) each write a distinct trace file

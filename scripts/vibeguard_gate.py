@@ -133,7 +133,7 @@ def scan_diff(diff_text: str) -> list[str]:
             prior = removed_by_skeleton.get(_skeleton(body))
             if prior is None:
                 continue
-            if any(new > old for old, new in zip(_numbers(prior), _numbers(body))):
+            if any(new > old for old, new in zip(_numbers(prior), _numbers(body), strict=False)):
                 findings.append(
                     f"widened money-movement/fallback bound in `{body.strip()}` "
                     f"(was `{prior.strip()}`)"
