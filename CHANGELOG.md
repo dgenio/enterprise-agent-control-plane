@@ -10,6 +10,8 @@ exercise — they make no production-readiness or security claims.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-24
+
 ### Added
 
 - **Lint, format, and type CI gate** (`.github/workflows/lint.yml`, `make lint`,
@@ -95,12 +97,11 @@ exercise — they make no production-readiness or security claims.
 
 <!--
 Release process (requires repository admin; not performed automatically):
-  git tag -a v0.2.0 -m "v0.2.0"
-  git push origin v0.2.0
-Then publish a GitHub Release for v0.2.0 whose notes reuse the canonical
+  git tag -a v0.3.0 -m "v0.3.0"
+  git push origin v0.3.0
+Then publish a GitHub Release for v0.3.0 whose notes reuse the canonical
 description and link the README, the demo, and the docs index.
 -->
 
-[Unreleased]: https://github.com/dgenio/enterprise-agent-control-plane/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/dgenio/enterprise-agent-control-plane/releases/tag/v0.2.0
-[0.1.0]: https://github.com/dgenio/enterprise-agent-control-plane/releases/tag/v0.1.0
+[Unreleased]: https://github.com/dgenio/enterprise-agent-control-plane/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dgenio/enterprise-agent-control-plane/releases/tag/v0.3.0

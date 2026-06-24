@@ -4,8 +4,8 @@ title: "enterprise-agent-control-plane"
 abstract: "Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces."
 authors:
   - name: "dgenio"
-version: "0.2.0"
-date-released: "2026-06-17"
+version: "0.3.0"
+date-released: "2026-06-24"
 license: "Apache-2.0"
 keywords:
   - "AI agents"
