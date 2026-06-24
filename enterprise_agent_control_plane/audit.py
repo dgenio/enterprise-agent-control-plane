@@ -20,10 +20,11 @@ it usable as evidence rather than a free-text log:
 import copy
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any
 
 # Genesis seed for the hash chain: the first event links to this fixed, all-zero hash so
 # the chain has an explicit, recomputable starting point (issue #39).
@@ -98,7 +99,9 @@ class ValidationResult:
     errors: list[str] = field(default_factory=list)
 
 
-def _event_hash(ts: str, actor: str, action: str, outcome: str, details: dict[str, Any], prev_hash: str) -> str:
+def _event_hash(
+    ts: Any, actor: Any, action: Any, outcome: Any, details: Any, prev_hash: Any
+) -> str:
     """SHA-256 over a canonical JSON of the event content plus the previous hash.
 
     ``sort_keys`` makes the digest independent of dict ordering, so an event hashes the
@@ -131,7 +134,7 @@ class AuditTrace:
         # value would either hash via its ``str()`` fallback or fail to save -- keep the
         # recorded evidence and what is persisted/verified identical.
         prev_hash = self.events[-1].hash if self.events else GENESIS_HASH
-        ts = datetime.now(UTC).isoformat()
+        ts = datetime.now(timezone.utc).isoformat()
         # Store an independent copy so later mutation of the caller's dict -- e.g. the
         # ``output.frame`` details, which run_case also returns as ``bounded_output`` --
         # cannot silently alter recorded evidence or invalidate the hash chain.
@@ -172,7 +175,7 @@ def verify_event_chain(events: Iterable[dict[str, Any]]) -> bool:
     or reordered event breaks the chain. A malformed event (missing fields) fails
     verification rather than raising, so a corrupted trace is reported, not crashed on.
     """
-    prev_hash = GENESIS_HASH
+    prev_hash: Any = GENESIS_HASH
     for event in events:
         if event.get("prev_hash") != prev_hash:
             return False
@@ -192,7 +195,7 @@ def verify_event_chain(events: Iterable[dict[str, Any]]) -> bool:
 
 def validate_trace(
     events: Iterable[dict[str, Any]],
-    required_actions: Optional[Iterable[str]] = None,
+    required_actions: Iterable[str] | None = None,
 ) -> ValidationResult:
     """Validate serialized events against the schema (issue #112).
 
@@ -201,9 +204,9 @@ def validate_trace(
     Dependency-free and offline.
     """
     errors: list[str] = []
-    seen: set[str] = set()
+    seen: set[Any] = set()
     for index, event in enumerate(events):
-        action = event.get("action")
+        action: Any = event.get("action")
         seen.add(action)
         required_fields = ACTION_VOCABULARY.get(action)
         if required_fields is None:

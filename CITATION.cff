@@ -1,4 +1,4 @@
-cff-version: 0.3.0
+cff-version: 1.2.0
 message: "If you use this reference architecture, please cite it using this metadata."
 title: "enterprise-agent-control-plane"
 abstract: "Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces."

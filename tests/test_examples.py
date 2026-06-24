@@ -23,9 +23,7 @@ class TestExamplesRun(unittest.TestCase):
     def test_gallery_is_discovered(self):
         # Guard against the glob silently matching nothing (which would make the run-tests
         # below vacuously pass); the gallery ships four examples.
-        self.assertEqual(
-            len(_EXAMPLES), 4, f"expected 4 runnable examples, found {_EXAMPLES}"
-        )
+        self.assertEqual(len(_EXAMPLES), 4, f"expected 4 runnable examples, found {_EXAMPLES}")
 
     def test_each_example_runs_cleanly(self):
         for name in _EXAMPLES:
@@ -43,9 +41,7 @@ class TestExamplesRun(unittest.TestCase):
                     f"{name} exited {result.returncode}\nstdout:\n{result.stdout}\n"
                     f"stderr:\n{result.stderr}",
                 )
-                self.assertTrue(
-                    result.stdout.strip(), f"{name} produced no output"
-                )
+                self.assertTrue(result.stdout.strip(), f"{name} produced no output")
 
 
 if __name__ == "__main__":

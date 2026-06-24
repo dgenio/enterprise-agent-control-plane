@@ -37,7 +37,9 @@ class TestBaselineCharacterization(unittest.TestCase):
     def test_write_action_runs_with_no_policy_decision(self):
         # Gap: a destructive action runs with no principal, token, or policy decision.
         result = BaselineAgent().run_case("refund request", "C-100", "INV-9")
-        refund_writes = [w for w in result["policy_blind_writes"] if w["capability"] == "billing.issue_refund"]
+        refund_writes = [
+            w for w in result["policy_blind_writes"] if w["capability"] == "billing.issue_refund"
+        ]
         self.assertEqual(len(refund_writes), 1)
         write = refund_writes[0]
         self.assertIsNone(write["principal"])
@@ -90,7 +92,9 @@ class TestBaselineCharacterization(unittest.TestCase):
         self.assertIn("email.send_reply", sent_writes)
 
         fake_tools.reset_state()
-        drafted = BaselineAgent(router=route_v2).run_case("send direct email reply", "C-100", "INV-9")
+        drafted = BaselineAgent(router=route_v2).run_case(
+            "send direct email reply", "C-100", "INV-9"
+        )
         draft_writes = [w["capability"] for w in drafted["policy_blind_writes"]]
         self.assertNotIn("email.draft_reply", draft_writes)
 

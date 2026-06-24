@@ -15,7 +15,9 @@ class TestFrames(unittest.TestCase):
             "internal_margin": "[FAKE] 0.62",
         }
         frame = store.wrap(
-            "billing.get_invoice", output, risk="low",
+            "billing.get_invoice",
+            output,
+            risk="low",
             sensitive_fields={"payment_method", "internal_margin"},
         )
         self.assertEqual(frame.redacted_fields, ["internal_margin", "payment_method"])

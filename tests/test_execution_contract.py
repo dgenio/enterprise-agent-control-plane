@@ -34,15 +34,21 @@ class TestSideEffectBoundary(unittest.TestCase):
 
     def test_denied_refund_leaves_no_side_effect(self):
         # An amount over the manager limit is denied outright; no refund may be recorded.
-        result = GovernedAgent().run_case("refund request", "C-100", "INV-9", principal="support_agent")
+        result = GovernedAgent().run_case(
+            "refund request", "C-100", "INV-9", principal="support_agent"
+        )
         # Force a deny by gating a huge amount directly through the decision path.
-        decision = GovernedAgent().decide("billing.issue_refund", "support_agent", {"amount": 9999.0})
+        decision = GovernedAgent().decide(
+            "billing.issue_refund", "support_agent", {"amount": 9999.0}
+        )
         self.assertEqual(decision.outcome, "denied")
         self.assertEqual(result["bounded_output"]["gated_capability"], "billing.issue_refund")
         self.assertEqual(fake_tools.REFUNDS, [])
 
     def test_approved_refund_commits_once_and_is_recorded(self):
-        result = GovernedAgent(approver=lambda req: True).run_case("refund request", "C-100", "INV-9")
+        result = GovernedAgent(approver=lambda req: True).run_case(
+            "refund request", "C-100", "INV-9"
+        )
         self.assertEqual(result["bounded_output"]["action_status"], "approved")
         self.assertEqual(len(fake_tools.REFUNDS), 1)
         self.assertEqual(fake_tools.REFUNDS[0]["committed"], True)
@@ -142,7 +148,9 @@ class TestCaseScopedIdempotency(unittest.TestCase):
         self.assertEqual(len(fake_tools.REFUNDS), 1)
         self.assertEqual(first["bounded_output"]["gated_actions"][0]["commit_mode"], "committed")
         self.assertEqual(second["bounded_output"]["gated_actions"][0]["commit_mode"], "replay")
-        self.assertEqual([e["details"]["mode"] for e in _events(second, "action.commit")], ["replay"])
+        self.assertEqual(
+            [e["details"]["mode"] for e in _events(second, "action.commit")], ["replay"]
+        )
 
 
 class TestSeparationOfDuties(unittest.TestCase):
@@ -152,16 +160,18 @@ class TestSeparationOfDuties(unittest.TestCase):
         fake_tools.reset_state()
 
     def test_authorized_approver_is_recorded(self):
-        result = GovernedAgent(approver=lambda req: True).run_case("refund request", "C-100", "INV-9")
+        result = GovernedAgent(approver=lambda req: True).run_case(
+            "refund request", "C-100", "INV-9"
+        )
         self.assertEqual(result["bounded_output"]["action_status"], "approved")
         resolved = _events(result, "approval.resolved")
         self.assertEqual(len(resolved), 1)
         self.assertEqual(resolved[0]["details"]["approver"], "support_manager")
 
     def test_self_approval_is_rejected(self):
-        result = GovernedAgent(approver=lambda req: True, approver_principal="support_agent").run_case(
-            "refund request", "C-100", "INV-9", principal="support_agent"
-        )
+        result = GovernedAgent(
+            approver=lambda req: True, approver_principal="support_agent"
+        ).run_case("refund request", "C-100", "INV-9", principal="support_agent")
         self.assertEqual(result["bounded_output"]["action_status"], "approval_denied")
         self.assertEqual(fake_tools.REFUNDS, [])
         resolved = _events(result, "approval.resolved")
@@ -169,9 +179,9 @@ class TestSeparationOfDuties(unittest.TestCase):
 
     def test_unauthorized_approver_is_rejected(self):
         # billing_admin is not in APPROVER_AUTHORITY, so it cannot approve a destructive action.
-        result = GovernedAgent(approver=lambda req: True, approver_principal="billing_admin").run_case(
-            "refund request", "C-100", "INV-9", principal="support_agent"
-        )
+        result = GovernedAgent(
+            approver=lambda req: True, approver_principal="billing_admin"
+        ).run_case("refund request", "C-100", "INV-9", principal="support_agent")
         self.assertEqual(result["bounded_output"]["action_status"], "approval_denied")
         self.assertEqual(fake_tools.REFUNDS, [])
         resolved = _events(result, "approval.resolved")

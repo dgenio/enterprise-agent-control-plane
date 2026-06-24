@@ -70,11 +70,13 @@ class TestReviewedLessonChangesPolicy(unittest.TestCase):
         base = AgentFencePolicy()
         weaver = LessonWeaverStub()
         weaver.add_failure(
-            "F-first", "first correction",
+            "F-first",
+            "first correction",
             proposed_change=PolicyChange("refund_auto_limit", 30.0, "tighten to 30"),
         )
         weaver.add_failure(
-            "F-second", "second correction",
+            "F-second",
+            "second correction",
             proposed_change=PolicyChange("refund_auto_limit", 10.0, "tighten further to 10"),
         )
         weaver.mark_reviewed("F-first")

@@ -50,37 +50,48 @@ class TestTraceabilityDetection(unittest.TestCase):
         # Positive control: a well-formed row produces no errors, so the negatives below are
         # attributable to the injected defect, not the scaffolding.
         root = self._tmp_root()
-        self._write_matrix(root, "| risk | control | contextweaver | [`code.py`](../code.py) | Implemented |")
+        self._write_matrix(
+            root, "| risk | control | contextweaver | [`code.py`](../code.py) | Implemented |"
+        )
         self.assertEqual(check_matrix(root), [])
 
     def test_unconstrained_status_is_flagged(self):
         root = self._tmp_root()
-        self._write_matrix(root, "| risk | control | contextweaver | [`code.py`](../code.py) | Shipped |")
+        self._write_matrix(
+            root, "| risk | control | contextweaver | [`code.py`](../code.py) | Shipped |"
+        )
         errors = check_matrix(root)
         self.assertTrue(any("not one of the allowed values" in e for e in errors), errors)
 
     def test_unknown_library_is_flagged(self):
         root = self._tmp_root()
-        self._write_matrix(root, "| risk | control | madeuplib | [`code.py`](../code.py) | Implemented |")
+        self._write_matrix(
+            root, "| risk | control | madeuplib | [`code.py`](../code.py) | Implemented |"
+        )
         errors = check_matrix(root)
         self.assertTrue(any("no known Weaver Stack library" in e for e in errors), errors)
 
     def test_broken_code_link_is_flagged(self):
         root = self._tmp_root()
-        self._write_matrix(root, "| risk | control | contextweaver | [`gone.py`](../gone.py) | Implemented |")
+        self._write_matrix(
+            root, "| risk | control | contextweaver | [`gone.py`](../gone.py) | Implemented |"
+        )
         errors = check_matrix(root)
         self.assertTrue(any("broken code/doc link" in e for e in errors), errors)
 
     def test_partial_row_without_issue_is_flagged(self):
         root = self._tmp_root()
-        self._write_matrix(root, "| risk | control | lessonweaver | [`code.py`](../code.py) | Partial |")
+        self._write_matrix(
+            root, "| risk | control | lessonweaver | [`code.py`](../code.py) | Partial |"
+        )
         errors = check_matrix(root)
         self.assertTrue(any("links no tracking issue" in e for e in errors), errors)
 
     def test_partial_row_with_issue_passes(self):
         root = self._tmp_root()
         self._write_matrix(
-            root, "| risk | control | lessonweaver | [`code.py`](../code.py) | Partial (planned, issue #68) |"
+            root,
+            "| risk | control | lessonweaver | [`code.py`](../code.py) | Partial (planned, issue #68) |",
         )
         self.assertEqual(check_matrix(root), [])
 

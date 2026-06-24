@@ -24,9 +24,9 @@ routers.
 
 import argparse
 import csv
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Sequence
 
 from .baseline_router import Router, route_v1, route_v2
 from .policies import AgentFencePolicy
@@ -148,9 +148,7 @@ def evaluate_routers(path: Path = ROUTING_LOGS) -> list[EvalResult]:
         total = totals[candidate]
         hits = matched.get(candidate, 0)
         score = hits / total if total else 0.0
-        results.append(
-            EvalResult(candidate, score, f"{hits}/{total} queries routed as expected")
-        )
+        results.append(EvalResult(candidate, score, f"{hits}/{total} queries routed as expected"))
     return results
 
 
@@ -164,7 +162,7 @@ def compare_router_candidates(path: Path = ROUTING_LOGS) -> list[EvalResult]:
 class PolicyEvalCase:
     principal: str
     capability: str
-    amount: Optional[float]
+    amount: float | None
     expected: str
     actual: str
     match: bool
@@ -188,14 +186,14 @@ class PolicyEvalReport:
         return sum(1 for c in self.cases if c.match) / len(self.cases)
 
 
-def _parse_amount(raw: str) -> Optional[float]:
+def _parse_amount(raw: str) -> float | None:
     raw = (raw or "").strip()
     return float(raw) if raw else None
 
 
 def evaluate_policy(
     path: Path = POLICY_DECISIONS,
-    policy: Optional[AgentFencePolicy] = None,
+    policy: AgentFencePolicy | None = None,
 ) -> PolicyEvalReport:
     """Replay golden policy cases through a candidate policy and report drift (issue #40).
 
@@ -288,7 +286,7 @@ def run_gate(verbose: bool = True) -> tuple[bool, list[str]]:
     return (not failures), failures
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Offline router/policy evaluation gate.")
     parser.add_argument(
         "--generate",

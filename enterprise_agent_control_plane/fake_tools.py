@@ -1,6 +1,5 @@
 from typing import Any
 
-
 # NOTE: every value below is obviously synthetic ("[FAKE]" / example.com). The extra
 # internal-style fields (notes, risk flags, payment fragments, history) exist so the
 # unsafe baseline has something realistic to over-expose: it forwards these complete
@@ -99,7 +98,9 @@ def billing_get_invoice(invoice_id: str) -> dict[str, Any]:
 # runs in dry-run mode: it shapes and returns the *planned* result but mutates no state, so
 # the governed path can separate the decision to act from the act itself and only commit
 # after an explicit ``allow``.
-def billing_issue_refund(invoice_id: str, amount: float, reason: str, commit: bool = True) -> dict[str, Any]:
+def billing_issue_refund(
+    invoice_id: str, amount: float, reason: str, commit: bool = True
+) -> dict[str, Any]:
     refund = {
         "invoice_id": invoice_id,
         "amount": amount,
@@ -129,7 +130,10 @@ def support_create_task(customer_id: str, note: str, commit: bool = True) -> dic
 
 
 def email_draft_reply(customer_name: str, topic: str) -> dict[str, Any]:
-    return {"subject": f"Re: your {topic} enquiry", "body": f"Hi {customer_name},\\nWe have looked into your enquiry."}
+    return {
+        "subject": f"Re: your {topic} enquiry",
+        "body": f"Hi {customer_name},\\nWe have looked into your enquiry.",
+    }
 
 
 def email_send_reply(to: str, subject: str, body: str, commit: bool = True) -> dict[str, Any]:
@@ -146,7 +150,9 @@ def email_send_reply(to: str, subject: str, body: str, commit: bool = True) -> d
 
 
 def docs_search_policy(query: str) -> list[dict[str, Any]]:
-    return [{"policy_id": "P-REFUND-001", "title": "Refund approvals", "snippet": f"Match for: {query}"}]
+    return [
+        {"policy_id": "P-REFUND-001", "title": "Refund approvals", "snippet": f"Match for: {query}"}
+    ]
 
 
 def audit_export_case(case_id: str) -> dict[str, Any]:

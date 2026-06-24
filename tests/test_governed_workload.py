@@ -16,7 +16,10 @@ class TestGovernedWorkload(unittest.TestCase):
         for scenario in WORKLOAD:
             fake_tools.reset_state()
             result = GovernedAgent().run_case(
-                scenario.request, scenario.customer_id, scenario.invoice_id, principal="support_agent"
+                scenario.request,
+                scenario.customer_id,
+                scenario.invoice_id,
+                principal="support_agent",
             )
             outcomes[scenario.name] = result["bounded_output"]
         return outcomes

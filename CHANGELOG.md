@@ -14,6 +14,25 @@ exercise — they make no production-readiness or security claims.
 
 ### Added
 
+- **Lint, format, and type CI gate** (`.github/workflows/lint.yml`, `make lint`,
+  `make type`, `[tool.ruff]`/`[tool.mypy]` config): ruff lint + format check and mypy
+  run on every push and pull request (issue #150).
+- **Python version CI matrix** — the test and eval workflows now run on Python 3.10,
+  3.11, and 3.12 so the declared `requires-python >= 3.10` support is verified (issue #151).
+- **Supply-chain hygiene** — all GitHub Actions are pinned to commit SHAs, a Dependabot
+  config (`.github/dependabot.yml`) tracks the `github-actions` and `pip` ecosystems, and a
+  CodeQL workflow (`.github/workflows/codeql.yml`) runs code scanning (issue #152).
+- **`make help`** — a self-documenting default target listing every target, plus a README
+  troubleshooting section (issue #164).
+- **Coverage reporting** — `make coverage` and a non-blocking CI coverage job surface which
+  governance paths are exercised (issue #175).
+- **Version-consistency guard** — `scripts/check_docs_health.py` now asserts the
+  `pyproject.toml` version has a matching `CHANGELOG.md` section and that `CITATION.cff`
+  agrees (issue #192).
+- **Pre-commit configuration** (`.pre-commit-config.yaml`): local hooks mirroring the CI
+  ruff/mypy/docs-health/VibeGuard gates (issue #200).
+- **End-to-end audit-trace verification** — `make verify-trace` (and a CI step) run a
+  governed case and assert the trace is schema-complete and tamper-evident (issue #201).
 - **Examples gallery** (`examples/`, `docs/examples.md`): runnable, copy-paste
   snippets demonstrating the bounded shortlist, allow/deny/ask policy decisions,
   deterministic flow execution, and audit-trace export in isolation (issue #62).
@@ -33,6 +52,11 @@ exercise — they make no production-readiness or security claims.
 
 ### Changed
 
+- Replaced `datetime.UTC` (Python 3.11+) with `timezone.utc` so the code runs on the
+  declared floor of Python 3.10 (issue #151).
+- Applied `ruff format` across the tree and aligned annotations to modern syntax
+  (`X | None`, `collections.abc` imports) under the new lint gate (issue #150).
+- Corrected the `CITATION.cff` version to match the released `0.2.0` (issue #192).
 - README ecosystem links no longer carry the "placeholder" framing; the library
   list is an accurate table with canonical names, aliases, and `weaver-spec`
   (issue #144).

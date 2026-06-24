@@ -8,12 +8,44 @@ read. See the [docs index](docs/README.md) and the
 
 ## Setup
 
-The only dependency is `pydantic`. Everything runs offline with no API keys.
+The only runtime dependency is `pydantic`. Everything runs offline with no API keys.
 
 ```bash
 make setup   # pip install -e .
 make demo    # run the baseline-vs-governed demo
 make test    # run the unit test suite
+make help    # list every target with a one-line description
+```
+
+The lint, type-check, coverage, and pre-commit tooling lives in a pinned, dev-only
+extra (the runtime dependency set stays just `pydantic`):
+
+```bash
+pip install -e .[dev]
+```
+
+## Code quality (lint, types, coverage)
+
+CI enforces the same gates you can run locally (install `.[dev]` first):
+
+```bash
+make lint          # ruff lint + format check (issue #150)
+make type          # mypy over the package and scripts (issue #150)
+make coverage      # run the suite under coverage and print a report (issue #175)
+make verify-trace  # assert a governed run's audit trace is complete + tamper-evident (issue #201)
+```
+
+`ruff format` owns line wrapping, so reformat with `ruff format .` rather than hand-wrapping.
+
+### Local hooks (pre-commit)
+
+A [`.pre-commit-config.yaml`](.pre-commit-config.yaml) mirrors the fast CI gates (ruff,
+mypy, docs-health, and the VibeGuard domain self-check) so issues are caught before they
+reach CI (issue #200):
+
+```bash
+pre-commit install
+pre-commit run --all-files
 ```
 
 ## Running the demo and tests

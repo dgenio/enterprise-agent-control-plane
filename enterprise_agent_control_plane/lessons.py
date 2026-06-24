@@ -15,7 +15,7 @@ The contrast it demonstrates:
 """
 
 from dataclasses import dataclass, replace
-from typing import Any, Optional
+from typing import Any
 
 from .policies import AgentFencePolicy
 
@@ -48,7 +48,7 @@ class LessonCandidate:
     failure_id: str
     summary: str
     reviewed: bool = False
-    proposed_change: Optional[PolicyChange] = None
+    proposed_change: PolicyChange | None = None
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -69,7 +69,7 @@ class LessonWeaverStub:
         self,
         failure_id: str,
         summary: str,
-        proposed_change: Optional[PolicyChange] = None,
+        proposed_change: PolicyChange | None = None,
     ) -> None:
         self._candidates.append(
             LessonCandidate(

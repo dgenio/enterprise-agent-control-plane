@@ -15,8 +15,9 @@ these runners only make the existing gaps reproducible and quantifiable.
 """
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 from . import fake_tools
 from .baseline_agent import BaselineAgent
@@ -75,7 +76,9 @@ def aggregate_session_side_effects(
     if reset:
         fake_tools.reset_state()
     for scenario in scenarios:
-        BaselineAgent(router=route_v1).run_case(scenario.request, scenario.customer_id, scenario.invoice_id)
+        BaselineAgent(router=route_v1).run_case(
+            scenario.request, scenario.customer_id, scenario.invoice_id
+        )
 
     refund_value = sum(r["amount"] for r in fake_tools.REFUNDS)
     total_actions = len(fake_tools.REFUNDS) + len(fake_tools.SENT_EMAILS) + len(fake_tools.TASKS)

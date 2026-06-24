@@ -25,8 +25,12 @@ class TestRoleDifferentiatedDecisions(unittest.TestCase):
         # support.create_task is in the agent/manager grant (write -> ask) but NOT
         # billing_admin's, so billing_admin is rejected at the token layer -- the previously
         # unused principal now produces a distinct decision (issue #108).
-        self.assertEqual(self._decide_outcome("support.create_task", "support_agent"), "approval_required")
-        self.assertEqual(self._decide_outcome("support.create_task", "support_manager"), "approval_required")
+        self.assertEqual(
+            self._decide_outcome("support.create_task", "support_agent"), "approval_required"
+        )
+        self.assertEqual(
+            self._decide_outcome("support.create_task", "support_manager"), "approval_required"
+        )
         self.assertEqual(self._decide_outcome("support.create_task", "billing_admin"), "denied")
 
     def test_audit_export_is_restricted_to_managers(self):

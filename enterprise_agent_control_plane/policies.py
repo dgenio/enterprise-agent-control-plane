@@ -1,8 +1,9 @@
 import hashlib
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
-from typing import Any, Iterable, Literal, Optional, cast
+from datetime import datetime, timedelta, timezone
+from typing import Any, Literal, cast
 
 from .registry import CAPABILITY_REGISTRY
 
@@ -39,7 +40,7 @@ REFUND_MANAGER_LIMIT = 500.0
 class PolicyDecision:
     decision: Decision
     reason: str
-    action_class: Optional[ActionClass] = None
+    action_class: ActionClass | None = None
 
 
 class AgentFencePolicy:
@@ -93,7 +94,7 @@ class AgentFencePolicy:
         self,
         capability: str,
         principal: str,
-        args: Optional[dict[str, Any]] = None,
+        args: dict[str, Any] | None = None,
     ) -> PolicyDecision:
         args = args or {}
         action_class = ACTION_CLASSES.get(capability)
@@ -113,7 +114,9 @@ class AgentFencePolicy:
             return PolicyDecision("allow", f"{capability} is a read action; allowed.", action_class)
 
         if action_class == "write":
-            return PolicyDecision("ask", f"{capability} is a write action; requires approval.", action_class)
+            return PolicyDecision(
+                "ask", f"{capability} is a write action; requires approval.", action_class
+            )
 
         # destructive: parameter-aware thresholds (issue #36)
         amount = args.get("amount")
@@ -158,10 +161,10 @@ class CapabilityToken:
     capability: str
     scope: str = "customer-operations"
     issuer: str = "control-plane"
-    expires: Optional[datetime] = None
+    expires: datetime | None = None
 
     def is_valid(
-        self, capability: str, now: Optional[datetime] = None, scope: Optional[str] = None
+        self, capability: str, now: datetime | None = None, scope: str | None = None
     ) -> bool:
         if self.capability != capability:
             return False
@@ -172,7 +175,7 @@ class CapabilityToken:
             return False
         if self.expires is None:
             return True
-        now = now or datetime.now(UTC)
+        now = now or datetime.now(timezone.utc)
         return now < self.expires
 
 
@@ -222,14 +225,14 @@ APPROVER_AUTHORITY: dict[str, set[ActionClass]] = {
 }
 
 
-def may_approve(approver_principal: str, action_class: Optional[ActionClass]) -> bool:
+def may_approve(approver_principal: str, action_class: ActionClass | None) -> bool:
     """True if ``approver_principal`` is authorized to approve the given action class (#64)."""
     if action_class is None:
         return False
     return action_class in APPROVER_AUTHORITY.get(approver_principal, set())
 
 
-def issue_tokens(principal: str, expires: Optional[datetime] = None) -> list[CapabilityToken]:
+def issue_tokens(principal: str, expires: datetime | None = None) -> list[CapabilityToken]:
     """Mint the *standing* capability tokens a principal's role grants (issue #23).
 
     Every capability the role allows, on every invocation, non-expiring by default. This is
@@ -237,7 +240,10 @@ def issue_tokens(principal: str, expires: Optional[datetime] = None) -> list[Cap
     just-in-time contrast (issue #63).
     """
     grants = ROLE_GRANTS.get(principal, set())
-    return [CapabilityToken(principal=principal, capability=cap, expires=expires) for cap in sorted(grants)]
+    return [
+        CapabilityToken(principal=principal, capability=cap, expires=expires)
+        for cap in sorted(grants)
+    ]
 
 
 # --- Just-in-time, case-scoped token issuance (issue #63) ---------------------
@@ -252,9 +258,9 @@ def issue_case_tokens(
     principal: str,
     capabilities: Iterable[str],
     scope: str,
-    expires: Optional[datetime] = None,
+    expires: datetime | None = None,
     ttl_seconds: int = CASE_TOKEN_TTL_SECONDS,
-    now: Optional[datetime] = None,
+    now: datetime | None = None,
 ) -> list[CapabilityToken]:
     """Mint just-in-time, case-scoped tokens for a single run (issue #63).
 
@@ -266,7 +272,7 @@ def issue_case_tokens(
     """
     granted = ROLE_GRANTS.get(principal, set())
     if expires is None:
-        now = now or datetime.now(UTC)
+        now = now or datetime.now(timezone.utc)
         expires = now + timedelta(seconds=ttl_seconds)
     needed = sorted(set(capabilities) & granted)
     return [
@@ -278,8 +284,8 @@ def issue_case_tokens(
 def holds_capability(
     tokens: Iterable[CapabilityToken],
     capability: str,
-    now: Optional[datetime] = None,
-    scope: Optional[str] = None,
+    now: datetime | None = None,
+    scope: str | None = None,
 ) -> bool:
     """True if the principal holds a valid, unexpired token for the capability.
 

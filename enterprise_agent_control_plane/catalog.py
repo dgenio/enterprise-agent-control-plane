@@ -1,6 +1,6 @@
 import json
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable
 
 from pydantic import BaseModel
 
@@ -37,7 +37,9 @@ def build_catalog() -> list[ChoiceCard]:
     that heavyweight detail stays in :func:`build_tool_definitions` / the registry and never
     enters model-visible context (issue #24).
     """
-    return [ChoiceCard(spec.capability, spec.risk, spec.description) for spec in tool_capabilities()]
+    return [
+        ChoiceCard(spec.capability, spec.risk, spec.description) for spec in tool_capabilities()
+    ]
 
 
 def build_tool_definitions() -> list[ToolDefinition]:
@@ -82,7 +84,9 @@ def context_size(serialized: str) -> dict[str, int]:
     return {"chars": chars, "approx_tokens": chars // 4}
 
 
-def shortlist_capabilities(query: str, catalog: Iterable[ChoiceCard], limit: int = 4) -> list[ChoiceCard]:
+def shortlist_capabilities(
+    query: str, catalog: Iterable[ChoiceCard], limit: int = 4
+) -> list[ChoiceCard]:
     """contextweaver-style bounded shortlist adapter."""
     query_l = query.lower()
     scored: list[tuple[int, ChoiceCard]] = []

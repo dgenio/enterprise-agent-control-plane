@@ -57,8 +57,14 @@ class TestBaselineDemonstrations(unittest.TestCase):
     # --- #31: indirect prompt injection via untrusted tool output -------------
     def test_planted_directive_steers_a_write_with_no_refund_request(self):
         # The fixture carries an obviously-synthetic injected directive.
-        planted = [t for t in fake_tools.TICKETS["C-100"] if "issue a full refund" in t["agent_comments"].lower()]
-        self.assertTrue(planted, "expected a planted [FAKE] refund directive in the ticket fixtures")
+        planted = [
+            t
+            for t in fake_tools.TICKETS["C-100"]
+            if "issue a full refund" in t["agent_comments"].lower()
+        ]
+        self.assertTrue(
+            planted, "expected a planted [FAKE] refund directive in the ticket fixtures"
+        )
 
         # Gap: a benign read request (no 'refund' keyword) reaches a destructive refund
         # because tool data and instructions share one context with no boundary.
@@ -96,14 +102,18 @@ class TestBaselineDemonstrations(unittest.TestCase):
             caps = {s["capability"] for s in result["steps"]}
             if {"support.search_tickets", "support.create_task"} & caps:
                 reaches_support = True
-        self.assertTrue(reaches_support, "expected at least one workload case to reach the support path")
+        self.assertTrue(
+            reaches_support, "expected at least one workload case to reach the support path"
+        )
 
     # --- #42: cumulative model-visible context growth -------------------------
     def test_cumulative_context_grows_across_steps(self):
         result = BaselineAgent(router=route_v1).run_case("refund request", "C-100", "INV-9")
         growth = result["context_growth"]
         self.assertGreaterEqual(len(growth), 2)
-        self.assertLess(growth[0]["cumulative_context_chars"], growth[-1]["cumulative_context_chars"])
+        self.assertLess(
+            growth[0]["cumulative_context_chars"], growth[-1]["cumulative_context_chars"]
+        )
         # The flat catalog-only metric (#15) is preserved and stays constant per step.
         for step in result["steps"]:
             self.assertEqual(step["context_chars"], result["full_catalog_context_chars"])
@@ -120,11 +130,15 @@ class TestBaselineDemonstrations(unittest.TestCase):
     def test_read_failure_silently_absorbed_on_email_path(self):
         # Gap: an unknown customer makes crm.search_customer fail, yet the email path still
         # runs against placeholder data and the run reports no failure signal.
-        result = BaselineAgent(router=route_v1).run_case("send a direct email reply", "C-404", "INV-9")
+        result = BaselineAgent(router=route_v1).run_case(
+            "send a direct email reply", "C-404", "INV-9"
+        )
         self.assertEqual(result["raw_outputs"]["crm.search_customer"]["error"], "not_found")
         self.assertIn("email.send_reply", result["raw_outputs"])
         self.assertTrue(result["silent_failures"])
-        self.assertTrue(any("email.send_reply ran against placeholder" in g for g in result["silent_failures"]))
+        self.assertTrue(
+            any("email.send_reply ran against placeholder" in g for g in result["silent_failures"])
+        )
         self.assertIsNone(result["failure_signal"])
 
     # --- #103: sensitive-data exfiltration via the ungated email send ---------

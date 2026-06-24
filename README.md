@@ -30,6 +30,19 @@ make demo
 make test
 ```
 
+Run `make` (or `make help`) to list every target with a one-line description.
+
+### Troubleshooting
+
+- **`ModuleNotFoundError: No module named 'enterprise_agent_control_plane'`** — run
+  `make setup` first (editable install), and run commands from the repository root.
+- **`No module named 'pydantic'`** — the editable install did not complete; re-run
+  `make setup`. The only runtime dependency is `pydantic`.
+- **Import/`AttributeError` mentioning `datetime.UTC`** — you are on Python older than
+  3.10; this project requires **Python >= 3.10** (tested on 3.10–3.12).
+- **`ruff` / `mypy` / `coverage` not found** — install the dev tooling with
+  `pip install -e .[dev]`, then run `make lint` / `make type` / `make coverage`.
+
 ## What this repo is / is not
 
 **It is:**
