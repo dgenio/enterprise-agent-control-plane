@@ -4,6 +4,7 @@
 [![license: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![python: >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![status: reference architecture](https://img.shields.io/badge/status-reference%20architecture-6f42c1.svg)](README.md#disclaimer)
+[![Read the Weaver Stack overview on Towards AI](https://img.shields.io/badge/Read_the_overview-Towards_AI-black?logo=medium&logoColor=white)](https://pub.towardsai.net/the-weaver-stack-one-contract-layer-for-safe-llm-agents-7f733cad5eac)
 
 Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces.
 
