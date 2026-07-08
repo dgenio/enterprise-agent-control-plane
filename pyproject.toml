@@ -51,7 +51,7 @@ Issues = "https://github.com/dgenio/enterprise-agent-control-plane/issues"
 # safety gate (issues #91/#125) plus the lint/type/coverage/pre-commit toolchain (issues
 # #150/#175/#200). Versions are pinned so local runs match CI.
 dev = [
-    "vibeguard-gate==0.9.0",
+    "vibeguard-gate==0.10.0",
     "ruff==0.15.8",
     "mypy==1.19.1",
     "coverage==7.14.1",
