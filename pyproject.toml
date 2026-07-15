@@ -54,7 +54,7 @@ dev = [
     "vibeguard-gate==0.10.0",
     "ruff==0.15.8",
     "mypy==1.19.1",
-    "coverage==7.14.1",
+    "coverage==7.15.1",
     "pre-commit==4.6.0",
 ]
 
