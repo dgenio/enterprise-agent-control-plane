@@ -53,7 +53,7 @@ Issues = "https://github.com/dgenio/enterprise-agent-control-plane/issues"
 dev = [
     "vibeguard-gate==0.10.0",
     "ruff==0.15.21",
-    "mypy==1.19.1",
+    "mypy==2.3.0",
     "coverage==7.15.1",
     "pre-commit==4.6.0",
 ]
