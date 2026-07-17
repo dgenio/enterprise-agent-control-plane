@@ -1,7 +1,13 @@
 # AgentFence-style policy: action-class-driven with a deny-by-default posture
-# (issues #2, #36). NOTE: the runtime currently reads the equivalent rules from
-# enterprise_agent_control_plane/policies.py; unifying YAML as the single source of
-# truth is tracked separately in issue #3.
+# (issues #2, #36). Loaded at runtime as the single source of truth for the policy
+# *rules* (issue #3): how each action class is decided, the refund thresholds, and the
+# principal restrictions.
+#
+# The capability -> action-class assignment below is a CHECKED MIRROR of the authoritative
+# declaration in enterprise_agent_control_plane/registry.py (issue #65): the runtime derives
+# action classes from the registry, and tests/test_yaml_parity.py (issue #148) fails if this
+# list drifts from it. Keeping the map here documents the surface the policy governs in one
+# place; the registry -- not this file -- remains the source of truth for the assignment.
 
 # How each action class is decided.
 action_classes:
@@ -9,7 +15,7 @@ action_classes:
   write: ask
   destructive: threshold
 
-# Capability -> action class.
+# Capability -> action class (mirror of the registry; parity-checked, not the runtime source).
 capabilities:
   crm.search_customer: read
   billing.get_invoice: read
@@ -20,17 +26,22 @@ capabilities:
   support.create_task: write
   email.send_reply: write
   billing.issue_refund: destructive
+  # Control-plane capability (issue #114): revealing a Frame's redacted raw detail is a
+  # governed, audited, principal-restricted read. Not offered to the model as a tool.
+  frame.expand: read
 
 # Capabilities only specific principals may invoke, regardless of action class.
 restricted:
   audit.export_case: [support_manager, supervisor]
+  frame.expand: [support_manager, supervisor, billing_admin]
 
-# Parameter-aware thresholds for destructive money movement (issue #36).
+# Parameter-aware thresholds for destructive money movement (issue #36). Key names carry the
+# money-context vocabulary the VibeGuard domain gate scans, so a widening is caught here just
+# as it was when these lived in policies.py (see scripts/vibeguard_gate.py, issue #179).
 thresholds:
   billing.issue_refund:
-    auto_allow_at_or_below: 50.0
-    require_approval_at_or_below: 500.0
-    # above require_approval_at_or_below -> deny
+    refund_auto_limit: 50.0        # at or below -> allow
+    refund_manager_limit: 500.0    # at or below -> ask; above -> deny
 
 # Anything not classified above is denied.
 default: deny

@@ -8,7 +8,7 @@ help: ## Show this help (the default target)
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}'
 
-setup: ## Install the package in editable mode (only runtime dependency: pydantic)
+setup: ## Install the package in editable mode (runtime dependencies: pydantic, pyyaml)
 	python -m pip install -e .
 
 demo: ## Run the baseline-vs-governed demo and refresh the trace/scorecard artifacts
@@ -28,7 +28,7 @@ lint: ## Lint and format-check with ruff (needs .[dev]; issue #150)
 	ruff format --check .
 
 type: ## Static type-check the package and scripts with mypy (needs .[dev]; issue #150)
-	mypy
+	python -m mypy
 
 coverage: ## Run the suite under coverage and print a missing-lines report (needs .[dev]; issue #175)
 	coverage run -m unittest discover -s tests -p "test_*.py"

@@ -19,7 +19,7 @@ would live in their own stack.
 ## Setup (do this before the room is watching)
 
 ```bash
-make setup   # only runtime dependency is pydantic; fully offline
+make setup   # runtime dependencies: pydantic, pyyaml; fully offline
 make demo    # confirm it runs end-to-end and the scorecard prints
 make test    # optional: confirm the suite is green
 ```

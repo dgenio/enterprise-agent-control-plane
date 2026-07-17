@@ -5,35 +5,46 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, cast
 
+from .config import load_agentfence_policy, load_capability_policy
 from .registry import CAPABILITY_REGISTRY
 
 Decision = Literal["allow", "deny", "ask"]
 ActionClass = Literal["read", "write", "destructive"]
 
 
+# The AgentFence policy rules are loaded from YAML as the single source of truth (issue #3).
+_AF_POLICY = load_agentfence_policy()
+
+
 # --- Action classes (issue #2) ------------------------------------------------
 # Every governed capability is classified by the kind of side effect it can have. Derived from
 # the single capability registry (issue #65) so the classification can never drift from the
-# catalog or tool bindings. Anything not in the registry is unknown and denied by default
-# (deny-by-default) -- see ``AgentFencePolicy.evaluate``.
+# catalog or tool bindings -- the registry, NOT the policy YAML, is authoritative for this
+# assignment (see AGENTS.md and tests/test_yaml_parity.py). Anything not in the registry is
+# unknown and denied by default (deny-by-default) -- see ``AgentFencePolicy.evaluate``.
 ACTION_CLASSES: dict[str, ActionClass] = {
     cap: cast(ActionClass, spec.action_class) for cap, spec in CAPABILITY_REGISTRY.items()
 }
 
-# Capabilities only specific principals may ever invoke, regardless of action class.
-# audit.export_case exposes case evidence; frame.expand reveals a Frame's redacted raw detail
-# (issue #114) -- both are restricted to principals authorized to see sensitive material.
+# How each action class is decided, from the policy YAML (issue #3): e.g. read -> allow,
+# write -> ask, destructive -> threshold. The mapping is data; the threshold *logic* stays in
+# ``evaluate`` (no evaluated rule language -- that is the separate big-swing issue #182).
+ACTION_CLASS_DECISIONS: dict[str, str] = dict(_AF_POLICY["action_classes"])
+
+# Capabilities only specific principals may ever invoke, regardless of action class, from the
+# policy YAML (issue #3). audit.export_case exposes case evidence; frame.expand reveals a
+# Frame's redacted raw detail (issue #114) -- both are restricted to principals authorized to
+# see sensitive material.
 PRINCIPAL_RESTRICTED: dict[str, set[str]] = {
-    "audit.export_case": {"support_manager", "supervisor"},
-    "frame.expand": {"support_manager", "supervisor", "billing_admin"},
+    cap: set(principals) for cap, principals in (_AF_POLICY.get("restricted") or {}).items()
 }
 
-# Parameter-aware thresholds for destructive money movement (issue #36). An amount at
-# or below the auto limit is allowed outright; at or below the manager limit it requires
-# approval; anything larger is denied. Mirrored in policies/agentfence.policy.yaml;
-# unifying YAML as the single runtime source is tracked in issue #3.
-REFUND_AUTO_LIMIT = 50.0
-REFUND_MANAGER_LIMIT = 500.0
+# Parameter-aware thresholds for destructive money movement (issue #36), from the policy YAML
+# (issue #3). An amount at or below the auto limit is allowed outright; at or below the manager
+# limit it requires approval; anything larger is denied.
+_REFUND_THRESHOLDS = _AF_POLICY["thresholds"]["billing.issue_refund"]
+REFUND_AUTO_LIMIT = float(_REFUND_THRESHOLDS["refund_auto_limit"])
+REFUND_MANAGER_LIMIT = float(_REFUND_THRESHOLDS["refund_manager_limit"])
 
 
 @dataclass(frozen=True)
@@ -79,6 +90,7 @@ class AgentFencePolicy:
         payload = json.dumps(
             {
                 "action_classes": ACTION_CLASSES,
+                "action_class_decisions": ACTION_CLASS_DECISIONS,
                 "principal_restricted": {k: sorted(v) for k, v in PRINCIPAL_RESTRICTED.items()},
                 "thresholds": self.thresholds(),
             },
@@ -110,15 +122,29 @@ class AgentFencePolicy:
                 action_class,
             )
 
-        if action_class == "read":
-            return PolicyDecision("allow", f"{capability} is a read action; allowed.", action_class)
-
-        if action_class == "write":
+        # The decision for this action class comes from the policy YAML (issue #3): read is
+        # allowed, write asks for approval, destructive is threshold-evaluated below.
+        rule = ACTION_CLASS_DECISIONS.get(action_class)
+        if rule == "allow":
             return PolicyDecision(
-                "ask", f"{capability} is a write action; requires approval.", action_class
+                "allow", f"{capability} is a {action_class} action; allowed.", action_class
             )
 
-        # destructive: parameter-aware thresholds (issue #36)
+        if rule == "ask":
+            return PolicyDecision(
+                "ask", f"{capability} is a {action_class} action; requires approval.", action_class
+            )
+
+        if rule != "threshold":
+            # Deny-by-default: a known action class with no recognised decision rule is never
+            # allowed (defends against a YAML that classifies an action class it cannot decide).
+            return PolicyDecision(
+                "deny",
+                f"{capability} action class {action_class!r} has no decision rule; denied by default.",
+                action_class,
+            )
+
+        # threshold: parameter-aware thresholds for destructive money movement (issue #36)
         amount = args.get("amount")
         if amount is None:
             return PolicyDecision(
@@ -179,38 +205,11 @@ class CapabilityToken:
         return now < self.expires
 
 
-# Role -> capabilities each principal is granted scoped tokens for (issue #23).
-# Mirrored in policies/capability_policy.yaml; runtime unification tracked in issue #3.
+# Role -> capabilities each principal is granted scoped tokens for (issue #23), loaded from
+# policies/capability_policy.yaml as the single source of truth (issue #3).
 ROLE_GRANTS: dict[str, set[str]] = {
-    "support_agent": {
-        "crm.search_customer",
-        "billing.get_invoice",
-        "support.search_tickets",
-        "docs.search_policy",
-        "email.draft_reply",
-        "email.send_reply",
-        "support.create_task",
-        "billing.issue_refund",
-    },
-    "support_manager": {
-        "crm.search_customer",
-        "billing.get_invoice",
-        "support.search_tickets",
-        "docs.search_policy",
-        "email.draft_reply",
-        "email.send_reply",
-        "support.create_task",
-        "billing.issue_refund",
-        "audit.export_case",
-        # May reveal a Frame's redacted raw detail (issue #114); support_agent may not.
-        "frame.expand",
-    },
-    "billing_admin": {
-        "crm.search_customer",
-        "billing.get_invoice",
-        "billing.issue_refund",
-        "frame.expand",
-    },
+    principal: set(cfg.get("grants") or [])
+    for principal, cfg in (load_capability_policy().get("principals") or {}).items()
 }
 
 

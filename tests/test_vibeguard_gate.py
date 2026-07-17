@@ -91,9 +91,10 @@ class TestVibeGuardGate(unittest.TestCase):
         )
 
     def test_raising_refund_auto_limit_is_flagged(self):
-        # The docstring/docs advertise raising REFUND_AUTO_LIMIT as a detected class; lock
-        # it in. This exercises the "limit" branch of _MONEY_CONTEXT, distinct from the
-        # "amount" fallback covered above.
+        # The docstring/docs advertise raising a refund limit as a detected class; lock it in.
+        # This exercises the "limit" branch of _MONEY_CONTEXT, distinct from the "amount"
+        # fallback covered above. (The live threshold now lives in the policy YAML -- see the
+        # next test; this keeps proving the gate's Python-source detection independently.)
         diff = (
             "+++ b/enterprise_agent_control_plane/policies.py\n"
             "@@ -34,1 +34,1 @@\n"
@@ -104,6 +105,23 @@ class TestVibeGuardGate(unittest.TestCase):
         self.assertTrue(
             any("REFUND_AUTO_LIMIT" in f and "5000" in f for f in findings),
             f"expected a widened-bound finding for REFUND_AUTO_LIMIT, got: {findings}",
+        )
+
+    def test_raising_refund_limit_in_policy_yaml_is_flagged(self):
+        # The refund thresholds moved to policies/agentfence.policy.yaml (issue #3). The YAML
+        # is a scanned runtime surface, and the ``refund_auto_limit`` key carries the money
+        # vocabulary, so widening it there is still caught -- the safety demonstration survives
+        # the relocation (see scripts/vibeguard_gate.py, issue #179).
+        diff = (
+            "+++ b/policies/agentfence.policy.yaml\n"
+            "@@ -30,1 +30,1 @@\n"
+            "-    refund_auto_limit: 50.0\n"
+            "+    refund_auto_limit: 5000.0\n"
+        )
+        findings = scan_diff(diff)
+        self.assertTrue(
+            any("refund_auto_limit" in f and "5000" in f for f in findings),
+            f"expected a widened-bound finding for the YAML refund limit, got: {findings}",
         )
 
     def test_introducing_a_network_call_is_flagged(self):

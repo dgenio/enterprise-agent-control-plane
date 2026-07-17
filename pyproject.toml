@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENSE" }
 authors = [{ name = "dgenio" }]
-dependencies = ["pydantic>=2"]
+dependencies = ["pydantic>=2", "pyyaml>=6"]
 keywords = [
     "ai-agents",
     "agent-governance",
@@ -47,13 +47,14 @@ Issues = "https://github.com/dgenio/enterprise-agent-control-plane/issues"
 
 [project.optional-dependencies]
 # Dev/CI-only tooling -- not required to run the demo or tests. The runtime dependency set
-# stays just `pydantic`. `pip install -e .[dev]` installs the official VibeGuard pre-merge
+# stays just `pydantic` and `pyyaml`. `pip install -e .[dev]` installs the official VibeGuard pre-merge
 # safety gate (issues #91/#125) plus the lint/type/coverage/pre-commit toolchain (issues
 # #150/#175/#200). Versions are pinned so local runs match CI.
 dev = [
     "vibeguard-gate==0.10.0",
     "ruff==0.15.21",
     "mypy==1.19.1",
+    "types-PyYAML==6.0.12.20260518",
     "coverage==7.15.1",
     "pre-commit==4.6.0",
 ]

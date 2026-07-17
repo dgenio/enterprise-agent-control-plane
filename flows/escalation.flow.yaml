@@ -1,6 +1,11 @@
 flow_id: escalation
+# Escalation runs only its read-only prep as executed steps (search history). The risky
+# write (support.create_task) is deliberately NOT a step: it is declared as a gated
+# capability so the governed path holds it for a policy decision before it can take effect
+# -- mirroring how refund_review/customer_reply keep their gated write out of the executed
+# steps. See enterprise_agent_control_plane/flows.py and issue #165.
 steps:
   - name: search_tickets
     capability: support.search_tickets
-  - name: create_task
-    capability: support.create_task
+gated_capabilities:
+  - support.create_task

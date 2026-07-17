@@ -2,6 +2,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Optional
 
+from .config import load_flow_definitions
+from .errors import ErrorCode, StepStatus, error, is_error
+from .registry import bind_step_args, validate_step_input
+
 
 @dataclass(frozen=True)
 class FlowStep:
@@ -20,49 +24,24 @@ class FlowDefinition:
     gated_capabilities: tuple[str, ...] = ()
 
 
-FLOW_REGISTRY: dict[str, FlowDefinition] = {
-    "refund_review": FlowDefinition(
-        flow_id="refund_review",
-        steps=[
-            FlowStep("lookup_customer", "crm.search_customer"),
-            FlowStep("lookup_invoice", "billing.get_invoice"),
-            FlowStep("check_policy", "docs.search_policy"),
-            FlowStep("draft_reply", "email.draft_reply"),
-        ],
-        gated_capabilities=("billing.issue_refund",),
-    ),
-    "customer_reply": FlowDefinition(
-        flow_id="customer_reply",
-        steps=[
-            FlowStep("lookup_customer", "crm.search_customer"),
-            FlowStep("draft_reply", "email.draft_reply"),
-        ],
-        gated_capabilities=("email.send_reply",),
-    ),
-    # Escalation does only its read-only prep here (search history). The risky write
-    # (support.create_task) is NOT a flow step: it is gated separately via the policy
-    # decision so it can be held for approval before it ever takes effect — mirroring
-    # how refund_review/customer_reply keep their gated action (issue_refund/send_reply)
-    # out of the executed steps.
-    "escalation": FlowDefinition(
-        flow_id="escalation",
-        steps=[FlowStep("search_tickets", "support.search_tickets")],
-        gated_capabilities=("support.create_task",),
-    ),
-    # A flow that performs TWO writes: issue the refund AND send a confirmation email. It
-    # exists to prove gating coverage scales with the workflow (issue #66) -- both writes are
-    # gated independently rather than a single per-intent action.
-    "refund_and_notify": FlowDefinition(
-        flow_id="refund_and_notify",
-        steps=[
-            FlowStep("lookup_customer", "crm.search_customer"),
-            FlowStep("lookup_invoice", "billing.get_invoice"),
-            FlowStep("check_policy", "docs.search_policy"),
-            FlowStep("draft_reply", "email.draft_reply"),
-        ],
-        gated_capabilities=("billing.issue_refund", "email.send_reply"),
-    ),
-}
+def _build_flow_registry() -> dict[str, FlowDefinition]:
+    """Build the flow registry from ``flows/*.flow.yaml`` -- the single source of truth (#3).
+
+    The YAML files drive the registry directly; there is no hardcoded Python mirror to drift
+    from them. ``tests/test_yaml_parity.py`` (issue #148) guards that every step/gated
+    capability names a real registry capability.
+    """
+    registry: dict[str, FlowDefinition] = {}
+    for flow_id, spec in load_flow_definitions().items():
+        registry[flow_id] = FlowDefinition(
+            flow_id=flow_id,
+            steps=[FlowStep(name, capability) for name, capability in spec["steps"]],
+            gated_capabilities=spec["gated_capabilities"],
+        )
+    return registry
+
+
+FLOW_REGISTRY: dict[str, FlowDefinition] = _build_flow_registry()
 
 
 # Intent -> governed flow (issue #25). The governed path makes a single deterministic
@@ -134,9 +113,14 @@ class ChainWeaverExecutor:
         than silently widening exposure to the full tool map. ``budget=None`` disables the
         check (a plain executor).
 
-        A step that fails -- the tool returns an ``{"error": ...}`` payload or raises -- halts
-        the flow closed (issue #41): the failing step is recorded with status ``failed`` and
-        no later step runs, so a not-found dependency can never reach a downstream write.
+        Each step's inputs are validated against the capability's declared schema *before* the
+        tool runs (issues #4/#162): a missing or wrong-typed field fails the step closed with an
+        ``invalid_input`` error instead of the unhandled ``KeyError`` the old dispatcher raised.
+
+        A step that fails -- validation fails, the tool returns an ``{"error": ...}`` payload,
+        or it raises -- halts the flow closed (issue #41): the failing step is recorded with
+        status ``failed`` and no later step runs, so a bad dependency can never reach a
+        downstream write.
 
         Note the two fail-closed mechanisms are deliberately distinct: a token-blocked step
         (``token_valid=False``) is per-step least privilege (#111) -- it is skipped and the
@@ -149,16 +133,15 @@ class ChainWeaverExecutor:
             if budget is not None and step.capability not in budget:
                 # Out of budget: the shortlist never surfaced this capability, so the flow
                 # fails closed here rather than reaching beyond the bounded budget (issue #110).
-                record = {
-                    "step": step.name,
-                    "capability": step.capability,
-                    "output": {
-                        "error": "out_of_budget",
-                        "detail": f"{step.capability} is outside the case capability budget",
-                    },
-                    "token_valid": True,
-                    "status": "failed",
-                }
+                record = self._record(
+                    step,
+                    output=error(
+                        ErrorCode.OUT_OF_BUDGET,
+                        detail=f"{step.capability} is outside the case capability budget",
+                    ),
+                    token_valid=True,
+                    status=StepStatus.FAILED,
+                )
                 results.append(record)
                 if on_step is not None:
                     on_step(record)
@@ -166,29 +149,21 @@ class ChainWeaverExecutor:
             token_valid = True if token_check is None else token_check(step.capability)
             if not token_valid:
                 # Fail closed: no token, so the tool never runs (issue #111).
-                record = {
-                    "step": step.name,
-                    "capability": step.capability,
-                    "output": None,
-                    "token_valid": False,
-                    "status": "blocked_no_token",
-                }
+                record = self._record(
+                    step, output=None, token_valid=False, status=StepStatus.BLOCKED_NO_TOKEN
+                )
                 results.append(record)
                 if on_step is not None:
                     on_step(record)
                 continue
-            try:
-                out = self._invoke_step(step.capability, payload)
-            except Exception as exc:  # noqa: BLE001 - convert any tool error into a structured failure
-                out = {"error": "exception", "detail": str(exc)}
-            failed = isinstance(out, dict) and "error" in out
-            record = {
-                "step": step.name,
-                "capability": step.capability,
-                "output": out,
-                "token_valid": True,
-                "status": "failed" if failed else "ok",
-            }
+            out = self._invoke_step(step.capability, payload)
+            failed = is_error(out)
+            record = self._record(
+                step,
+                output=out,
+                token_valid=True,
+                status=StepStatus.FAILED if failed else StepStatus.OK,
+            )
             results.append(record)
             if on_step is not None:
                 on_step(record)
@@ -197,20 +172,34 @@ class ChainWeaverExecutor:
                 break
         return results
 
+    @staticmethod
+    def _record(
+        step: FlowStep, output: Any, token_valid: bool, status: StepStatus
+    ) -> dict[str, Any]:
+        return {
+            "step": step.name,
+            "capability": step.capability,
+            "output": output,
+            "token_valid": token_valid,
+            "status": status.value,
+        }
+
     def _invoke_step(self, capability: str, payload: dict[str, Any]) -> Any:
-        if capability == "crm.search_customer":
-            return self.tools[capability](payload["customer_id"])
-        if capability == "billing.get_invoice":
-            return self.tools[capability](payload["invoice_id"])
-        if capability == "docs.search_policy":
-            return self.tools[capability]("refund")
-        if capability == "email.draft_reply":
-            return self.tools[capability](payload["customer_name"], "refund review")
-        if capability == "support.search_tickets":
-            return self.tools[capability](payload["customer_id"])
-        # support.create_task is a gated write (governed_agent settles it after a decision), not
-        # a flow step in any registered flow today. The branch stays so the executor can run a
-        # flow that lists it as a step without a code change; it is unreachable via FLOW_REGISTRY.
-        if capability == "support.create_task":
-            return self.tools[capability](payload["customer_id"], "Escalated by governed flow")
-        return {"error": "unknown_step"}
+        """Invoke one flow step, validating and binding its args from the registry (#149).
+
+        The per-capability ``if/elif`` this method used to be -- including the unreachable
+        ``support.create_task`` branch (issue #165) -- is gone: the call is derived from the
+        capability's ``args_schema`` / ``step_defaults`` via :func:`registry.bind_step_args`,
+        so a new flow step needs no code change here. Inputs are schema-validated first
+        (issues #4/#162), and any tool exception is converted to a structured failure (#41).
+        """
+        tool = self.tools.get(capability)
+        if tool is None:
+            return error(ErrorCode.UNKNOWN_STEP, capability=capability)
+        invalid = validate_step_input(capability, payload)
+        if invalid is not None:
+            return invalid
+        try:
+            return tool(*bind_step_args(capability, payload))
+        except Exception as exc:  # noqa: BLE001 - convert any tool error into a structured failure
+            return error(ErrorCode.EXCEPTION, capability=capability, detail=str(exc))

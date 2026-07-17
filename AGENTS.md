@@ -19,7 +19,7 @@ software. See [`README.md`](README.md) and [`SECURITY.md`](SECURITY.md).
 
 ## Setup, run, and test
 
-Everything is offline and key-free. The only runtime dependency is `pydantic`.
+Everything is offline and key-free. The only runtime dependencies are `pydantic` and `pyyaml`.
 
 ```bash
 make setup   # python -m pip install -e .
@@ -84,3 +84,35 @@ workflows; keep them green.
   description and topics in [`METADATA.md`](METADATA.md) and the terms in the
   [glossary](docs/glossary.md). The `docs-health` check enforces this — see
   `scripts/check_docs_health.py` and `make docs-health`.
+
+## Design decisions (protected invariants)
+
+These are deliberate architectural decisions. Changing one is allowed, but it is a
+*decision*, not a cleanup — update this record and the guarding test if you do.
+
+- **Single capability registry (issue #65, #167).** A capability's metadata is declared
+  once in [`registry.py`](enterprise_agent_control_plane/registry.py)
+  (`CAPABILITY_REGISTRY`). Every other view — the model-facing catalog and tool
+  definitions, the `ACTION_CLASSES` map, each agent's tool map, the bounded-Frame sensitive
+  fields, **and the flow-step argument binding/validation** (`bind_step_args`,
+  `validate_step_input`) — is *derived* from it. There is no second hand-maintained list of
+  capabilities. `tests/test_registry.py` guards the derived views stay in parity; adding a
+  capability is a single edit in `registry.py`.
+- **YAML is the runtime source of truth for flows and policy rules (issue #3).** Flow
+  structure (`flows/*.flow.yaml`) and policy rules — action-class decisions, refund
+  thresholds, principal restrictions, role grants (`policies/*.yaml`) — are loaded at runtime
+  by [`config.py`](enterprise_agent_control_plane/config.py); there is no hardcoded Python
+  mirror. **Exception, by decision:** the capability→action-class *assignment* stays
+  authoritative in the registry (above); the policy YAML carries only a mirror of it, which
+  `tests/test_yaml_parity.py` (issue #148) checks for drift. This keeps the finer-grained
+  registry single-source intact (issue #65) while still driving the *policy rules* from YAML.
+  Loading policy *values* from YAML is deliberately not a rule-evaluation language — that is
+  the separate big-swing issue #182.
+- **Structured error taxonomy (issue #174).** Governed failures use the named codes in
+  [`errors.py`](enterprise_agent_control_plane/errors.py), not bare `{"error": "..."}`
+  string literals. The wire values are stable so emitted traces stay comparable.
+- **Preserve the unsafe baseline's own dispatcher (issue #149).** The governed executor is
+  registry-driven, but `baseline_agent._invoke` intentionally keeps its own explicit
+  dispatcher: its bindings are deliberately unsafe (raw-output forwarding, injected-directive
+  exfiltration, ungated sends). Do not fold it into the shared safe binder — that would erase
+  the "before" the demo contrasts against.

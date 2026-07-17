@@ -8,7 +8,8 @@ read. See the [docs index](docs/README.md) and the
 
 ## Setup
 
-The only runtime dependency is `pydantic`. Everything runs offline with no API keys.
+The only runtime dependencies are `pydantic` and `pyyaml` (the latter loads the flow and
+policy YAML as the single source of truth, issue #3). Everything runs offline with no API keys.
 
 ```bash
 make setup   # pip install -e .
@@ -18,7 +19,7 @@ make help    # list every target with a one-line description
 ```
 
 The lint, type-check, coverage, and pre-commit tooling lives in a pinned, dev-only
-extra (the runtime dependency set stays just `pydantic`):
+extra (the runtime dependency set stays just `pydantic` and `pyyaml`):
 
 ```bash
 pip install -e .[dev]

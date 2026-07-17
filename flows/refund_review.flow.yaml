@@ -8,3 +8,7 @@ steps:
     capability: docs.search_policy
   - name: draft_reply
     capability: email.draft_reply
+# The write the flow performs, gated by its own policy decision before it can take effect
+# (issue #66); it is not one of the executed steps above.
+gated_capabilities:
+  - billing.issue_refund

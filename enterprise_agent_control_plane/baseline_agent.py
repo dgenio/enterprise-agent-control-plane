@@ -3,6 +3,7 @@ from typing import Any
 
 from .baseline_router import Router, injected_exfil_target, route_v1
 from .catalog import build_tool_definitions, context_size, serialize_tool_catalog
+from .errors import ErrorCode, error
 from .registry import build_tool_map
 
 # Action classes the baseline does NOT distinguish: these move money / send external
@@ -247,6 +248,13 @@ class BaselineAgent:
     def _invoke(
         self, capability: str, customer_id: str, invoice_id: str, raw_outputs: dict[str, Any]
     ) -> Any:
+        # NOTE (issue #149): unlike the governed executor, this dispatcher is deliberately NOT
+        # folded into the registry-driven binder. The baseline's bindings are intentionally
+        # different and unsafe by design -- it forwards raw outputs verbatim, drafts a generic
+        # topic, and (for email.send_reply) follows an injected exfiltration directive with no
+        # policy gate. Those deliberate gaps are the "before" the governed path is contrasted
+        # against; routing them through the shared safe binder would erase the demonstration
+        # (see AGENTS.md "Preserve the unsafe baseline"). It keeps its own explicit dispatcher.
         tool = self.tools[capability]
         customer = raw_outputs.get("crm.search_customer", {})
         invoice = raw_outputs.get("billing.get_invoice", {})
@@ -285,7 +293,7 @@ class BaselineAgent:
             return tool("refund")
         if capability == "audit.export_case":
             return tool(customer_id)
-        return {"error": "unknown_capability", "capability": capability}
+        return error(ErrorCode.UNKNOWN_CAPABILITY, capability=capability)
 
 
 def _excess_fields(capability: str, output: Any) -> list[str]:

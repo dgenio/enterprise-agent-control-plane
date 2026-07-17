@@ -21,10 +21,12 @@ and honest framing over production hardening.
 
 - Just-in-time, case-scoped capability tokens with expiry, rather than standing
   role grants.
-- Load flow and policy definitions from the `flows/` and `policies/` YAML as the
-  single runtime source of truth, removing the hardcoded mirrors.
-- Schema-based input/output validation for deterministic flows.
 - Role-differentiated decisions demonstrated across all principals.
+
+Shipped: flow and policy definitions now load from the `flows/` and `policies/` YAML as the
+single runtime source of truth (issue #3), and deterministic flow steps validate their inputs
+against a declared schema before running (issues #4/#162). See the
+[Changelog](../CHANGELOG.md).
 
 ## Evaluation & lessons
 

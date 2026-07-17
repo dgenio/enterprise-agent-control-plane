@@ -10,6 +10,38 @@ exercise — they make no production-readiness or security claims.
 
 ## [Unreleased]
 
+### Added
+
+- **YAML as the single source of truth for flows and policy rules** (issue #3): a new
+  `enterprise_agent_control_plane/config.py` loads `flows/*.flow.yaml` into `FLOW_REGISTRY`
+  and the policy rules (action-class decisions, refund thresholds, principal restrictions,
+  role grants) from `policies/*.yaml` at runtime. The hardcoded Python mirrors are gone; a
+  change made only in YAML is now what the runtime uses. Adds `pyyaml` as a runtime dependency.
+- **Schema-based input validation for deterministic flows** (issues #4, #162): each flow step
+  validates its inputs against the capability's declared `args_schema` (via `pydantic`) before
+  the tool runs, failing closed with a structured `invalid_input` error instead of an
+  unhandled `KeyError`.
+- **Structured error taxonomy** (issue #174): `enterprise_agent_control_plane/errors.py`
+  replaces scattered `{"error": "..."}` string literals with named `ErrorCode` values and
+  `error`/`is_error` helpers. Wire values are unchanged so emitted traces stay comparable.
+- **YAML/registry parity guard** (issue #148): `tests/test_yaml_parity.py` fails if a flow or
+  policy YAML file drifts from the authoritative capability registry.
+- **Single-source-of-truth decision record** (issue #167): `AGENTS.md` documents the protected
+  invariants, and `tests/test_registry.py` now guards that every flow-step capability is
+  dispatched from the registry (no hand-written branch).
+
+### Changed
+
+- **Registry-driven flow-step dispatch** (issues #149, #165): `ChainWeaverExecutor._invoke_step`
+  and `GovernedAgent._invoke_write` no longer hand-maintain per-capability `if/elif` chains;
+  step arguments are bound from the registry (`registry.bind_step_args`). The unreachable
+  `support.create_task` executor branch is removed, and `flows/escalation.flow.yaml` now
+  matches the design (the risky write is gated, not an executed step). The unsafe baseline
+  keeps its own explicit dispatcher by design (its bindings are deliberately unsafe).
+- The refund threshold keys in `policies/agentfence.policy.yaml` are renamed to
+  `refund_auto_limit` / `refund_manager_limit` to match the code vocabulary and keep the
+  VibeGuard domain gate able to detect a threshold widening after the values moved to YAML.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added

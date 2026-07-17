@@ -1,5 +1,7 @@
 from typing import Any
 
+from .errors import ErrorCode, error
+
 # NOTE: every value below is obviously synthetic ("[FAKE]" / example.com). The extra
 # internal-style fields (notes, risk flags, payment fragments, history) exist so the
 # unsafe baseline has something realistic to over-expose: it forwards these complete
@@ -85,11 +87,17 @@ def reset_state() -> None:
 
 
 def crm_search_customer(customer_id: str) -> dict[str, Any]:
-    return CUSTOMERS.get(customer_id, {"error": "not_found", "customer_id": customer_id})
+    customer = CUSTOMERS.get(customer_id)
+    if customer is None:
+        return error(ErrorCode.NOT_FOUND, customer_id=customer_id)
+    return customer
 
 
 def billing_get_invoice(invoice_id: str) -> dict[str, Any]:
-    return INVOICES.get(invoice_id, {"error": "not_found", "invoice_id": invoice_id})
+    invoice = INVOICES.get(invoice_id)
+    if invoice is None:
+        return error(ErrorCode.NOT_FOUND, invoice_id=invoice_id)
+    return invoice
 
 
 # The write/destructive tools below take a ``commit`` flag (issue #38). With ``commit=True``
