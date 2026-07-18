@@ -37,16 +37,27 @@ FLOWS_DIR = repo_root() / "flows"
 POLICIES_DIR = repo_root() / "policies"
 
 
-def _load_yaml(path: Path) -> Any:
+def _load_yaml(path: Path) -> dict[str, Any]:
     if not path.exists():
         raise FileNotFoundError(
             f"required config file {path} is missing; the YAML files are the single source of "
             f"truth (issue #3) and must be present (they ship at the repo root, resolved under "
             f"the editable install)."
         )
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        # Surface the offending file with the parser error rather than a bare YAMLError; this
+        # runs at import time, so the message must point at the file the reader has to fix.
+        raise ValueError(f"config file {path} is not valid YAML: {exc}") from exc
     if data is None:
         raise ValueError(f"config file {path} is empty or not valid YAML")
+    if not isinstance(data, dict):
+        # Every config file in this repo is a top-level mapping; a list/scalar would otherwise
+        # blow up later with an opaque AttributeError on ``.get``.
+        raise ValueError(
+            f"config file {path} must contain a top-level mapping, got {type(data).__name__}"
+        )
     return data
 
 
@@ -58,20 +69,31 @@ def load_flow_definitions() -> dict[str, dict[str, Any]]:
     """
     flows: dict[str, dict[str, Any]] = {}
     for path in sorted(FLOWS_DIR.glob("*.flow.yaml")):
-        data = _load_yaml(path)
+        data = _load_yaml(path)  # guaranteed a top-level mapping, or raises with the path
+        # Fail loudly with the file and field named -- this runs at import time via
+        # FLOW_REGISTRY, so a malformed file (steps as a mapping, a scalar step) must give a
+        # diagnostic error, not a raw TypeError/AttributeError.
         flow_id = data.get("flow_id")
         if not flow_id:
             raise ValueError(f"{path} is missing a 'flow_id'")
         if flow_id in flows:
             raise ValueError(f"duplicate flow_id {flow_id!r} (also defined in another file)")
         steps = data.get("steps") or []
-        for step in steps:
-            if "name" not in step or "capability" not in step:
-                raise ValueError(f"{path}: every step needs a 'name' and a 'capability'")
-        flows[flow_id] = {
-            "steps": [(s["name"], s["capability"]) for s in steps],
-            "gated_capabilities": tuple(data.get("gated_capabilities") or ()),
-        }
+        if not isinstance(steps, list):
+            raise ValueError(f"{path}: 'steps' must be a list, got {type(steps).__name__}")
+        parsed_steps: list[tuple[str, str]] = []
+        for index, step in enumerate(steps):
+            if not isinstance(step, dict) or "name" not in step or "capability" not in step:
+                raise ValueError(
+                    f"{path}: step {index} must be a mapping with a 'name' and a 'capability'"
+                )
+            parsed_steps.append((step["name"], step["capability"]))
+        gated = data.get("gated_capabilities") or []
+        if not isinstance(gated, list):
+            raise ValueError(
+                f"{path}: 'gated_capabilities' must be a list, got {type(gated).__name__}"
+            )
+        flows[flow_id] = {"steps": parsed_steps, "gated_capabilities": tuple(gated)}
     return dict(sorted(flows.items()))
 
 

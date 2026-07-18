@@ -93,5 +93,48 @@ class TestYamlIsTheRuntimeSourceOfTruth(unittest.TestCase):
         self.assertEqual(rebuilt["probe"].gated_capabilities, ("billing.issue_refund",))
 
 
+class TestMalformedConfigFailsLoudly(unittest.TestCase):
+    """Malformed config raises a diagnostic error naming the file, not an opaque exception.
+
+    This loads at import time via FLOW_REGISTRY, so a broken file must fail with a message
+    that points at the file and field to fix (raised by a Copilot review on the PR).
+    """
+
+    def _write(self, tmp: str, name: str, text: str) -> Path:
+        path = Path(tmp) / name
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_invalid_yaml_syntax_names_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "bad.yaml", "key: [unclosed\n")
+            with self.assertRaises(ValueError) as ctx:
+                config._load_yaml(path)
+            self.assertIn(str(path), str(ctx.exception))
+
+    def test_non_mapping_top_level_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, "list.yaml", "- a\n- b\n")
+            with self.assertRaises(ValueError) as ctx:
+                config._load_yaml(path)
+            self.assertIn("top-level mapping", str(ctx.exception))
+
+    def test_scalar_step_is_rejected_with_index(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "probe.flow.yaml", "flow_id: probe\nsteps:\n  - 42\n")
+            with mock.patch.object(config, "FLOWS_DIR", Path(tmp)):
+                with self.assertRaises(ValueError) as ctx:
+                    config.load_flow_definitions()
+            self.assertIn("step 0", str(ctx.exception))
+
+    def test_steps_as_mapping_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self._write(tmp, "probe.flow.yaml", "flow_id: probe\nsteps:\n  name: x\n")
+            with mock.patch.object(config, "FLOWS_DIR", Path(tmp)):
+                with self.assertRaises(ValueError) as ctx:
+                    config.load_flow_definitions()
+            self.assertIn("'steps' must be a list", str(ctx.exception))
+
+
 if __name__ == "__main__":
     unittest.main()
