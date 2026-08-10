@@ -1,16 +1,61 @@
-# Dependabot configuration (issue #152): keep GitHub Actions and Python dependencies current,
-# and let Dependabot bump the SHA-pinned actions automatically. Weekly cadence keeps noise low.
+# Dependency automation for the control plane. Routine compatible changes are
+# grouped; breaking framework/infrastructure upgrades remain individual review
+# units. Existing workflow Action references are immutable SHA pins.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      actions-nonmajor:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      actions-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+    labels:
+      - dependencies
     commit-message:
-      prefix: "ci"
+      prefix: "chore(ci)"
+
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
       interval: "weekly"
+      day: monday
+      time: "06:00"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+    groups:
+      python-nonmajor:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+      python-security-nonmajor:
+        applies-to: security-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
     commit-message:
-      prefix: "build"
+      prefix: "chore(deps)"
