@@ -1,0 +1,17 @@
+# A flow that performs TWO writes: issue the refund AND send a confirmation email. It
+# proves gating coverage scales with the workflow (issue #66) -- both writes are gated
+# independently rather than a single per-intent action. The read-only prep steps below are
+# identical to refund_review; only the gated_capabilities differ.
+flow_id: refund_and_notify
+steps:
+  - name: lookup_customer
+    capability: crm.search_customer
+  - name: lookup_invoice
+    capability: billing.get_invoice
+  - name: check_policy
+    capability: docs.search_policy
+  - name: draft_reply
+    capability: email.draft_reply
+gated_capabilities:
+  - billing.issue_refund
+  - email.send_reply

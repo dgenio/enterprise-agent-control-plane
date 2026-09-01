@@ -23,11 +23,18 @@ derived views stay in parity.
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import cache
 from typing import Any
 
+from pydantic import ValidationError, create_model
+
 from . import fake_tools
+from .errors import ErrorCode, error
 
 ActionClass = str  # "read" | "write" | "destructive" -- mirrors policies.ActionClass
+
+# args_schema type-string -> Python type, for schema-based validation (issues #4/#162).
+_TYPE_MAP: dict[str, type] = {"str": str, "float": float, "int": int, "bool": bool}
 
 
 @dataclass(frozen=True)
@@ -39,6 +46,11 @@ class CapabilitySpec:
     description: str
     action_class: ActionClass
     args_schema: dict[str, str] = field(default_factory=dict)
+    # Constant values a deterministic flow step supplies for args the case payload does not
+    # carry (issue #149). e.g. the refund flow searches the "refund" policy and drafts a
+    # "refund review" topic -- these are step invocation defaults, not case inputs, so an
+    # arg named here is NOT a required payload field for validation (issues #4/#162).
+    step_defaults: dict[str, Any] = field(default_factory=dict)
     # The bound tool callable, or ``None`` for a control-plane-only capability that has no
     # enterprise tool behind it (e.g. ``frame.expand``, which the agent mediates directly).
     tool: Callable[..., Any] | None = None
@@ -110,6 +122,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilitySpec] = {
         description="Draft customer-facing response text.",
         action_class="read",  # composes text only; no external side effect
         args_schema={"customer_name": "str", "topic": "str"},
+        step_defaults={"topic": "refund review"},
         tool=fake_tools.email_draft_reply,
     ),
     "email.send_reply": CapabilitySpec(
@@ -126,6 +139,7 @@ CAPABILITY_REGISTRY: dict[str, CapabilitySpec] = {
         description="Find internal policy references.",
         action_class="read",
         args_schema={"query": "str"},
+        step_defaults={"query": "refund"},
         tool=fake_tools.docs_search_policy,
     ),
     "audit.export_case": CapabilitySpec(
@@ -177,3 +191,69 @@ def risk_of(capability: str) -> str:
     """The declared risk band for ``capability`` (defaults to ``unknown``)."""
     spec = CAPABILITY_REGISTRY.get(capability)
     return spec.risk if spec is not None else "unknown"
+
+
+# --- Registry-driven step invocation and validation (issues #149, #4/#162) ----
+# A single binder derives a flow step's call from the registry, replacing the hand-maintained
+# per-capability ``if/elif`` dispatcher the executor used to carry (and its unreachable
+# ``support.create_task`` branch, issue #165). Both the binder and the validator read the same
+# ``args_schema`` / ``step_defaults``, so the invocation contract lives in one place.
+
+
+def required_step_inputs(capability: str) -> list[str]:
+    """The payload fields a flow step needs the case to supply (issues #4/#162).
+
+    Every ``args_schema`` field except those the step fills from ``step_defaults`` -- i.e. the
+    case inputs a caller must provide, in schema order.
+    """
+    spec = CAPABILITY_REGISTRY[capability]
+    return [name for name in spec.args_schema if name not in spec.step_defaults]
+
+
+@cache
+def _step_input_model(capability: str) -> type:
+    """A pydantic model over a step's required, typed inputs (issues #4/#162, cached)."""
+    spec = CAPABILITY_REGISTRY[capability]
+    fields: dict[str, Any] = {
+        name: (_TYPE_MAP.get(spec.args_schema[name], object), ...)
+        for name in required_step_inputs(capability)
+    }
+    model_name = capability.replace(".", "_") + "_StepInput"
+    return create_model(model_name, **fields)
+
+
+def validate_step_input(capability: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Validate a step's inputs before it runs; ``None`` if valid, else a structured error.
+
+    Replaces the executor's bare ``payload["customer_id"]`` access (which raised an unhandled
+    ``KeyError`` on bad input) with a declared, typed contract derived from the registry
+    (issues #4/#162). A missing or wrong-typed required field yields an ``invalid_input``
+    error (issue #174) the executor fails closed on, rather than an opaque exception.
+    """
+    model = _step_input_model(capability)
+    required = required_step_inputs(capability)
+    subset = {name: payload[name] for name in required if name in payload}
+    try:
+        model(**subset)
+    except ValidationError as exc:
+        fields = sorted({str(err["loc"][0]) for err in exc.errors() if err.get("loc")})
+        return error(
+            ErrorCode.INVALID_INPUT,
+            capability=capability,
+            detail=f"invalid or missing inputs for {capability}: {fields}",
+            fields=fields,
+        )
+    return None
+
+
+def bind_step_args(capability: str, payload: dict[str, Any]) -> list[Any]:
+    """Build a flow step's positional tool arguments from the registry (issue #149).
+
+    Each ``args_schema`` field is taken from the payload, or from ``step_defaults`` when the
+    payload does not carry it. Call :func:`validate_step_input` first: it guarantees every
+    required field is present, so this never raises the ``KeyError`` the old dispatcher could.
+    """
+    spec = CAPABILITY_REGISTRY[capability]
+    return [
+        payload[name] if name in payload else spec.step_defaults[name] for name in spec.args_schema
+    ]

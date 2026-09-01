@@ -1,8 +1,8 @@
-# Principals and the scoped capability tokens each role is granted (issue #23).
-# Each granted capability is issued as a scoped, optionally-expiring token; a principal
-# must hold a valid token for a capability before any policy evaluation runs. NOTE:
-# mirrored in enterprise_agent_control_plane/policies.py (ROLE_GRANTS); runtime
-# unification is tracked in issue #3.
+# Principals and the scoped capability tokens each role is granted (issue #23). Loaded at
+# runtime as the single source of truth for ROLE_GRANTS (issue #3). Each granted capability
+# is issued as a scoped, optionally-expiring token; a principal must hold a valid token for a
+# capability before any policy evaluation runs. tests/test_yaml_parity.py (issue #148) asserts
+# every granted capability is a known registry capability.
 
 defaults:
   scope: customer-operations
@@ -31,8 +31,11 @@ principals:
       - support.create_task
       - billing.issue_refund
       - audit.export_case
+      # May reveal a Frame's redacted raw detail (issue #114); support_agent may not.
+      - frame.expand
   billing_admin:
     grants:
       - crm.search_customer
       - billing.get_invoice
       - billing.issue_refund
+      - frame.expand

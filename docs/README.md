@@ -69,7 +69,7 @@ documentation; start here, then follow the links below.
 From the repository root:
 
 ```bash
-make setup   # install (only dependency: pydantic)
+make setup   # install (runtime dependencies: pydantic, pyyaml)
 make demo    # run the baseline-vs-governed demo, offline
 make test    # run the unit test suite
 ```

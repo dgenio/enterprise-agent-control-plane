@@ -13,6 +13,7 @@ from .catalog import (
     context_reduction,
     shortlist_capabilities,
 )
+from .errors import ErrorCode, error, is_error
 from .flows import FLOW_REGISTRY, ChainWeaverExecutor, select_flow
 from .frames import Frame, FrameStore, field_names
 from .policies import (
@@ -456,7 +457,7 @@ class GovernedAgent:
         failed_step = next((r for r in flow_results if r["status"] == "failed"), None)
         if failed_step is not None:
             out = failed_step.get("output")
-            if isinstance(out, dict) and out.get("error") == "out_of_budget":
+            if is_error(out, ErrorCode.OUT_OF_BUDGET):
                 reason = (
                     f"step {failed_step['step']!r} ({failed_step['capability']}) is outside the "
                     f"case capability budget {sorted(budget)}; flow halted before any write (issue #110)."
@@ -654,30 +655,54 @@ class GovernedAgent:
         flow_results: list[dict[str, Any]],
         commit: bool,
     ) -> dict[str, Any]:
-        """Invoke a gated write tool in dry-run or commit mode (issue #38)."""
-        if capability == "billing.issue_refund":
-            amount = self._invoice_amount(flow_results) or 0.0
-            return self.tools[capability](
-                payload["invoice_id"], amount, "governed refund", commit=commit
-            )
-        if capability == "email.send_reply":
-            draft: Any = next(
-                (r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {}
-            )
-            subject = (
-                draft.get("subject", "Update on your request")
-                if isinstance(draft, dict)
-                else "Update"
-            )
-            body = draft.get("body", "") if isinstance(draft, dict) else ""
-            return self.tools[capability](
-                "[FAKE] customer@example.com", subject, body, commit=commit
-            )
-        if capability == "support.create_task":
-            return self.tools[capability](
-                payload["customer_id"], "Escalated by governed flow", commit=commit
-            )
-        return {"error": "unknown_write", "capability": capability}
+        """Invoke a gated write tool in dry-run or commit mode (issue #38).
+
+        Dispatched from a table rather than a hand-ordered ``if/elif`` chain (issue #149): each
+        gated write derives its arguments differently (a refund reads the invoice amount from
+        the prior flow step, a send reads the drafted subject/body), so unlike the read steps
+        this is not a uniform payload binding -- but the table shares one structured
+        ``unknown_write`` default (issue #174) and adds a write without editing a branch chain.
+        """
+        invokers: dict[
+            str, Callable[[dict[str, Any], list[dict[str, Any]], bool], dict[str, Any]]
+        ] = {
+            "billing.issue_refund": self._write_refund,
+            "email.send_reply": self._write_send_reply,
+            "support.create_task": self._write_create_task,
+        }
+        invoker = invokers.get(capability)
+        if invoker is None:
+            return error(ErrorCode.UNKNOWN_WRITE, capability=capability)
+        return invoker(payload, flow_results, commit)
+
+    def _write_refund(
+        self, payload: dict[str, Any], flow_results: list[dict[str, Any]], commit: bool
+    ) -> dict[str, Any]:
+        amount = self._invoice_amount(flow_results) or 0.0
+        return self.tools["billing.issue_refund"](
+            payload["invoice_id"], amount, "governed refund", commit=commit
+        )
+
+    def _write_send_reply(
+        self, payload: dict[str, Any], flow_results: list[dict[str, Any]], commit: bool
+    ) -> dict[str, Any]:
+        draft: Any = next(
+            (r["output"] for r in flow_results if r["capability"] == "email.draft_reply"), {}
+        )
+        subject = (
+            draft.get("subject", "Update on your request") if isinstance(draft, dict) else "Update"
+        )
+        body = draft.get("body", "") if isinstance(draft, dict) else ""
+        return self.tools["email.send_reply"](
+            "[FAKE] customer@example.com", subject, body, commit=commit
+        )
+
+    def _write_create_task(
+        self, payload: dict[str, Any], flow_results: list[dict[str, Any]], commit: bool
+    ) -> dict[str, Any]:
+        return self.tools["support.create_task"](
+            payload["customer_id"], "Escalated by governed flow", commit=commit
+        )
 
     def run_decision_scenario(
         self,

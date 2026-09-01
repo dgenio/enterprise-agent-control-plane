@@ -6,14 +6,19 @@ describe exactly the same capability set with consistent metadata, so adding or 
 capability is a single edit that cannot leave one view out of sync.
 """
 
+import inspect
 import unittest
 
+from enterprise_agent_control_plane import fake_tools
 from enterprise_agent_control_plane.catalog import build_catalog, build_tool_definitions
+from enterprise_agent_control_plane.flows import FLOW_REGISTRY
 from enterprise_agent_control_plane.policies import ACTION_CLASSES
 from enterprise_agent_control_plane.registry import (
     CAPABILITY_REGISTRY,
+    bind_step_args,
     build_tool_map,
     tool_capabilities,
+    validate_step_input,
 )
 
 
@@ -50,6 +55,48 @@ class TestRegistryParity(unittest.TestCase):
         self.assertIn("frame.expand", ACTION_CLASSES)
         self.assertNotIn("frame.expand", tool_map)
         self.assertNotIn("frame.expand", {c.capability for c in build_catalog()})
+
+
+class TestRegistryDrivenDispatch(unittest.TestCase):
+    """Guard the flow-step invocation surface stays registry-derived (issues #149, #167).
+
+    The executor no longer hand-maintains a per-capability ``if/elif``; every flow step is
+    dispatched via the registry binder/validator. These tests protect that invariant: a step
+    whose capability could not be bound/validated from the registry would silently need a
+    bespoke branch again, which is exactly what #149 removed.
+    """
+
+    def setUp(self):
+        fake_tools.reset_state()
+
+    def test_every_flow_step_capability_is_bindable_and_validatable(self):
+        full_payload = {"customer_id": "C-100", "invoice_id": "INV-9", "customer_name": "Ari"}
+        for flow in FLOW_REGISTRY.values():
+            for step in flow.steps:
+                cap = step.capability
+                self.assertIn(cap, CAPABILITY_REGISTRY, cap)
+                # A full case payload validates, and the binder yields one positional arg per
+                # declared schema field -- no capability needs a hand-written dispatch branch.
+                self.assertIsNone(validate_step_input(cap, full_payload), cap)
+                bound = bind_step_args(cap, full_payload)
+                self.assertEqual(len(bound), len(CAPABILITY_REGISTRY[cap].args_schema), cap)
+
+    def test_bound_arg_count_matches_the_tool_signature(self):
+        # The registry-derived arg count must match each bound tool's required positional
+        # parameters, so a schema/tool mismatch is caught here rather than at runtime.
+        full_payload = {"customer_id": "C-100", "invoice_id": "INV-9", "customer_name": "Ari"}
+        tool_map = build_tool_map()
+        seen = {step.capability for flow in FLOW_REGISTRY.values() for step in flow.steps}
+        for cap in seen:
+            bound = bind_step_args(cap, full_payload)
+            sig = inspect.signature(tool_map[cap])
+            required = [
+                p
+                for p in sig.parameters.values()
+                if p.default is inspect.Parameter.empty
+                and p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)
+            ]
+            self.assertEqual(len(bound), len(required), cap)
 
 
 if __name__ == "__main__":

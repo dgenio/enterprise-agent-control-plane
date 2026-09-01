@@ -38,7 +38,7 @@ Run `make` (or `make help`) to list every target with a one-line description.
 - **`ModuleNotFoundError: No module named 'enterprise_agent_control_plane'`** — run
   `make setup` first (editable install), and run commands from the repository root.
 - **`No module named 'pydantic'`** — the editable install did not complete; re-run
-  `make setup`. The only runtime dependency is `pydantic`.
+  `make setup`. The only runtime dependencies are `pydantic` and `pyyaml`.
 - **Import/`AttributeError` mentioning `datetime.UTC`** — you are on Python older than
   3.10; this project requires **Python >= 3.10** (tested on 3.10–3.12).
 - **`ruff` / `mypy` / `coverage` not found** — install the dev tooling with
