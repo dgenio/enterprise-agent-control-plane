@@ -5,7 +5,7 @@
 [![python: >=3.10](https://img.shields.io/badge/python-%3E%3D3.10-3776AB.svg?logo=python&logoColor=white)](pyproject.toml)
 [![status: reference architecture](https://img.shields.io/badge/status-reference%20architecture-6f42c1.svg)](#disclaimer)
 
-Runnable reference architecture for governed enterprise tool-using agents: bounded context, deterministic business paths, policy/authorization gates, and auditable execution.
+Runnable reference architecture for governed enterprise tool-using agents: bounded context, policy gates, audit traces.
 
 > **Portfolio role: ASSEMBLE IT.** This repository should come *after* individual controls have proved useful elsewhere. Its job is to show that useful components compose cleanly on the same realistic synthetic workflow—not to convince you that every dgenio library is valuable. See [the portfolio-role note](docs/assemble-it.md).
 
